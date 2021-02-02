@@ -109,7 +109,7 @@ function(capp_package)
   cmake_parse_arguments(PARSE_ARGV 0 capp_package "" "NAME;GIT_URL;COMMIT" "OPTIONS")
   set(${capp_package_NAME}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
   set(${capp_package_NAME}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
-  set(${capp_package_NAME}_OPTIONS ${capp_package_OPTIONS} PARENT_SCOPE)
+  set(${capp_package_NAME}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
   set(${capp_package_NAME}_DIRECTORY "${CAPP_PACKAGE_DIRECTORY}" PARENT_SCOPE)
 endfunction()
 
@@ -122,6 +122,16 @@ function(capp_clone_package)
       RESULT_VARIABLE capp_clone_result
   )
   set(${capp_clone_package_RESULT_VARIABLE} ${capp_clone_result} PARENT_SCOPE)
+endfunction()
+
+function(capp_configure_package)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_configure_package "" "NAME;RESULT_VARIABLE" "")
+  capp_configure(
+      DIRECTORY ${${capp_configure_package_NAME}_DIRECTORY}
+      OPTIONS ${${capp_configure_package_NAME}_OPTIONS}
+      RESULT_VARIABLE capp_configure_result
+  )
+  set(${capp_configure_package_RESULT_VARIABLE} ${capp_configure_result} PARENT_SCOPE)
 endfunction()
 
 set(CAPP_PACKAGE_DIRECTORY trivial-mpi)
@@ -137,9 +147,9 @@ capp_clone_package(
     RESULT_VARIABLE capp_clone_package_result
 )
 
-capp_configure(
-    DIRECTORY trivial-mpi
-    RESULT_VARIABLE capp_configure_result
+capp_configure_package(
+    NAME TrivialMPI
+    RESULT_VARIABLE capp_configure_package_result
     )
 
 capp_build(
