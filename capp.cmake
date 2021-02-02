@@ -59,15 +59,9 @@ function(capp_clone)
   set(${capp_clone_RESULT_VARIABLE} "${capp_checkout_result}" PARENT_SCOPE)
 endfunction()
 
-capp_clone(
-    DIRECTORY trivial-mpi
-    GIT_URL git@cee-gitlab.sandia.gov:daibane/trivial-mpi.git
-    COMMIT 137a5faf53f48d9a59ef24b05ec549ca39f77765
-    RESULT_VARIABLE capp_clone_result
-)
-
 function(capp_configure)
   cmake_parse_arguments(PARSE_ARGV 0 capp_configure "" "DIRECTORY;RESULT_VARIABLE" "OPTIONS")
+  make_directory("${CAPP_BUILD_ROOT}/${capp_configure_DIRECTORY}")
   capp_execute(
       COMMAND
       "${CMAKE_COMMAND}"
@@ -80,4 +74,14 @@ function(capp_configure)
   set(${capp_configure_RESULT_VARIABLE} "${cmake_configure_result}" PARENT_SCOPE)
 endfunction()
 
-capp_configure(DIRECTORY trivial-mpi RESULT_VARIABLE capp_configure_result)
+capp_clone(
+    DIRECTORY trivial-mpi
+    GIT_URL git@cee-gitlab.sandia.gov:daibane/trivial-mpi.git
+    COMMIT 137a5faf53f48d9a59ef24b05ec549ca39f77765
+    RESULT_VARIABLE capp_clone_result
+)
+
+capp_configure(
+    DIRECTORY trivial-mpi
+     RESULT_VARIABLE capp_configure_result
+     )
