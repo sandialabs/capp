@@ -7,9 +7,10 @@ set(CAPP_INSTALL_ROOT "${CAPP_ROOT}/install")
 make_directory("${CAPP_SOURCE_ROOT}")
 make_directory("${CAPP_BUILD_ROOT}")
 make_directory("${CAPP_INSTALL_ROOT}")
-set(CMAKE_PROGRAM_PATH "C:/Program Files") #workaround a workaround for MSVC 2017 in FindGit.cmake
+if (WIN32)
+  set(CMAKE_PROGRAM_PATH "C:/Program Files") #workaround a workaround for MSVC 2017 in FindGit.cmake
+endif()
 find_package(Git REQUIRED)
-message("Git is at ${GIT_EXECUTABLE}")
 
 function(capp_execute)
   cmake_parse_arguments(PARSE_ARGV 0 capp_execute "" "WORKING_DIRECTORY;RESULT_VARIABLE" "COMMAND")
@@ -107,6 +108,7 @@ endfunction()
 
 function(capp_package)
   cmake_parse_arguments(PARSE_ARGV 0 capp_package "" "NAME;GIT_URL;COMMIT" "OPTIONS")
+  set(CAPP_PACKAGE_NAME ${capp_package_NAME} PARENT_SCOPE)
   set(${capp_package_NAME}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
   set(${capp_package_NAME}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
   set(${capp_package_NAME}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
@@ -134,13 +136,33 @@ function(capp_configure_package)
   set(${capp_configure_package_RESULT_VARIABLE} ${capp_configure_result} PARENT_SCOPE)
 endfunction()
 
+function(capp_build_install_package)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_build_install_package "" "NAME;RESULT_VARIABLE" "")
+  message("${capp_build_install_package_NAME}_DIRECTORY=${${capp_build_install_package_NAME}_DIRECTORY}")
+  capp_build(
+      DIRECTORY ${${capp_build_install_package_NAME}_DIRECTORY}
+      RESULT_VARIABLE capp_build_result
+  )
+  if (NOT capp_build_result EQUAL 0)
+    message("capp_build_install_packages sees that capp_build failed!")
+    set(${capp_build_configure_package_RESULT_VARIABLE} ${capp_build_result} PARENT_SCOPE)
+    return()
+  else()
+    message("capp_build_install_packages sees that capp_build succeeded!")
+  endif()
+  capp_install(
+      DIRECTORY ${${capp_build_install_package_NAME}_DIRECTORY}
+      RESULT_VARIABLE capp_install_result
+  )
+  set(${capp_build_configure_package_RESULT_VARIABLE} ${capp_install_result} PARENT_SCOPE)
+endfunction()
+
 set(CAPP_PACKAGE_DIRECTORY trivial-mpi)
 capp_package(
     NAME TrivialMPI
     GIT_URL git@cee-gitlab.sandia.gov:daibane/trivial-mpi.git
-    COMMIT a340978950cc0a455abeb7d34b2812d8400bbf46
+    COMMIT 2d133d4788014a46b694665d821919f7e0fcc7f3
 )
-message("now TrivialMPI_GIT_URL is ${TrivialMPI_GIT_URL}")
 
 capp_clone_package(
     NAME TrivialMPI
@@ -152,12 +174,7 @@ capp_configure_package(
     RESULT_VARIABLE capp_configure_package_result
     )
 
-capp_build(
-    DIRECTORY trivial-mpi
-    RESULT_VARIABLE capp_build_result
-)
-
-capp_install(
-    DIRECTORY trivial-mpi
-    RESULT_VARIABLE capp_install_result
+capp_build_install_package(
+    NAME TrivialMPI
+    RESULT_VARIABLE capp_build_install_result
 )
