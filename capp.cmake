@@ -83,5 +83,5 @@ capp_clone(
 
 capp_configure(
     DIRECTORY trivial-mpi
-     RESULT_VARIABLE capp_configure_result
-     )
+    RESULT_VARIABLE capp_configure_result
+    )
