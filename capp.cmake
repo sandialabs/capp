@@ -1,12 +1,5 @@
-message("CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}")
 set(CAPP_BUILD_TYPE Release)
-set(CAPP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
-set(CAPP_SOURCE_ROOT "${CAPP_ROOT}/source")
-set(CAPP_BUILD_ROOT "${CAPP_ROOT}/build")
-set(CAPP_INSTALL_ROOT "${CAPP_ROOT}/install")
-make_directory("${CAPP_SOURCE_ROOT}")
-make_directory("${CAPP_BUILD_ROOT}")
-make_directory("${CAPP_INSTALL_ROOT}")
+
 if (WIN32)
   set(CMAKE_PROGRAM_PATH "C:/Program Files") #workaround a workaround for MSVC 2017 in FindGit.cmake
 endif()
@@ -226,6 +219,7 @@ endfunction()
 
 function(capp_clone_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_clone_command "" "RESULT_VARIABLE" "GIT_ARGUMENTS")
+  make_directory("${CAPP_SOURCE_ROOT}")
   capp_execute(
     COMMAND "${GIT_EXECUTABLE}" clone ${capp_clone_command_GIT_ARGUMENTS}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
@@ -263,3 +257,97 @@ function(capp_clone_command)
   set(${capp_clone_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
+function(capp_add_file)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_add_file "" "RESULT_VARIABLE;FILE" "")
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" add "${capp_add_file_FILE}"
+    WORKING_DIRECTORY "${CAPP_ROOT}"
+    RESULT_VARIABLE git_add_result
+  )
+  set(${capp_add_file_RESULT_VARIABLE} ${git_add_result} PARENT_SCOPE)
+endfunction()
+
+function(capp_commit)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_commit "" "RESULT_VARIABLE;MESSAGE" "")
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" commit -m "${capp_commit_MESSAGE}"
+    WORKING_DIRECTORY "${CAPP_ROOT}"
+    RESULT_VARIABLE git_commit_result
+  )
+  set(${capp_commit_RESULT_VARIABLE} ${git_commit_result} PARENT_SCOPE)
+endfunction()
+
+function(capp_init_command)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_init_command "" "NAME;RESULT_VARIABLE" "")
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" init
+    WORKING_DIRECTORY "${CAPP_ROOT}"
+    RESULT_VARIABLE git_init_result
+  )
+  if (NOT git_init_result EQUAL 0)
+    set(${capp_init_command_RESULT_VARIABLE} ${git_init_result} PARENT_SCOPE)
+    return()
+  endif()
+  file(WRITE "${CAPP_ROOT}/app.cmake" "set(CAPP_APP ${capp_init_command_NAME})")
+  capp_add_file(
+    FILE "${CAPP_ROOT}/app.cmake"
+    RESULT_VARIABLE capp_add_file_result
+  )
+  if (NOT capp_add_file_result EQUAL 0)
+    set(${capp_init_command_RESULT_VARIABLE} ${capp_add_file_result} PARENT_SCOPE)
+    return()
+  endif()
+  capp_commit(
+    MESSAGE "Creating app ${capp_init_command_NAME}"
+    RESULT_VARIABLE capp_commit_result
+  )
+  set(${capp_init_command_RESULT_VARIABLE} ${capp_commit_result} PARENT_SCOPE)
+endfunction()
+
+math(EXPR ARGC_MINUS_ONE "${CMAKE_ARGC} - 1")
+if (CMAKE_ARGC LESS 4)
+  message(FATAL_ERROR "No command specified!")
+  return()
+endif()
+set(CAPP_COMMAND "${CMAKE_ARGV3}")
+set(CAPP_COMMAND_ARGUMENTS)
+foreach(argi RANGE 4 ${ARGC_MINUS_ONE})
+  set(CAPP_COMMAND_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS} "${CMAKE_ARGV${argi}}")
+endforeach()
+
+set(CAPP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+if (CAPP_COMMAND STREQUAL "init")
+  capp_init_command(
+    NAME ${CAPP_COMMAND_ARGUMENTS}
+    RESULT_VARIABLE capp_command_result
+  )
+else()
+  set(CAPP_TRUE TRUE)
+  while (CAPP_TRUE)
+    get_filename_component(CAPP_ROOT_PARENT "${CAPP_ROOT}" DIRECTORY)
+    if (CAPP_ROOT_PARENT STREQUAL CAPP_ROOT)
+      message(FATAL_ERROR "Could not find app.cmake in ${CMAKE_CURRENT_SOURCE_DIR} or any parent directories: Run capp init first")
+      return()
+    endif()
+    if (EXISTS "${CAPP_ROOT}/app.cmake")
+      include("${CAPP_ROOT}/app.cmake")
+      break()
+    endif()
+    set(CAPP_ROOT "${CAPP_ROOT_PARENT}")
+  endwhile()
+  set(CAPP_SOURCE_ROOT "${CAPP_ROOT}/source")
+  set(CAPP_BUILD_ROOT "${CAPP_ROOT}/build")
+  set(CAPP_INSTALL_ROOT "${CAPP_ROOT}/install")
+  if (CAPP_COMMAND STREQUAL "clone")
+    capp_clone_command(
+      GIT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+      RESULT_VARIABLE capp_command_result
+    )
+  else()
+    message(FATAL_ERROR "Unknown command ${CAPP_COMMAND}!")
+  endif()
+endif()
+
+if (NOT capp_command_result EQUAL 0)
+  message(FATAL_ERROR "CApp command ${CAPP_COMMAND} failed")
+endif()
