@@ -41,6 +41,26 @@ function(capp_checkout)
   set(${capp_checkout_RESULT_VARIABLE} "${git_checkout_result}" PARENT_SCOPE)
 endfunction()
 
+function(capp_add_file)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_add_file "" "RESULT_VARIABLE;FILE" "")
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" add "${capp_add_file_FILE}"
+    WORKING_DIRECTORY "${CAPP_ROOT}"
+    RESULT_VARIABLE git_add_result
+  )
+  set(${capp_add_file_RESULT_VARIABLE} ${git_add_result} PARENT_SCOPE)
+endfunction()
+
+function(capp_commit)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_commit "" "RESULT_VARIABLE;MESSAGE" "")
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" commit -m "${capp_commit_MESSAGE}"
+    WORKING_DIRECTORY "${CAPP_ROOT}"
+    RESULT_VARIABLE git_commit_result
+  )
+  set(${capp_commit_RESULT_VARIABLE} ${git_commit_result} PARENT_SCOPE)
+endfunction()
+
 function(capp_clone)
   cmake_parse_arguments(PARSE_ARGV 0 capp_clone "" "DIRECTORY;GIT_URL;COMMIT;RESULT_VARIABLE" "")
   capp_execute(
@@ -178,7 +198,7 @@ function(capp_write_package_file)
   set(file_contents "${file_contents}  OPTIONS ${${capp_write_package_file_NAME}_OPTIONS}\n")
   set(file_contents "${file_contents}  DEPENDENCIES ${${capp_write_package_file_NAME}_DEPENDENCIES}\n")
   set(file_contents "${file_contents})\n")
-  set(full_directory "${CAPP_ROOT}/packages/${${capp_write_package_file_NAME}_DIRECTORY}")
+  set(full_directory "${CAPP_PACKAGE_ROOT}/${${capp_write_package_file_NAME}_DIRECTORY}")
   make_directory("${full_directory}")
   file(WRITE "${full_directory}/package.cmake" "${file_contents}")
 endfunction()
@@ -255,26 +275,23 @@ function(capp_clone_command)
   endif()
   capp_write_package_file(NAME ${CAPP_PACKAGE_NAME})
   set(${capp_clone_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
-endfunction()
-
-function(capp_add_file)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_add_file "" "RESULT_VARIABLE;FILE" "")
-  capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" add "${capp_add_file_FILE}"
-    WORKING_DIRECTORY "${CAPP_ROOT}"
-    RESULT_VARIABLE git_add_result
+  capp_add_file(
+    FILE "${CAPP_PACKAGE_ROOT}/${${CAPP_PACKAGE_NAME}_DIRECTORY}/package.cmake"
+    RESULT_VARIABLE capp_add_file_result
   )
-  set(${capp_add_file_RESULT_VARIABLE} ${git_add_result} PARENT_SCOPE)
-endfunction()
-
-function(capp_commit)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_commit "" "RESULT_VARIABLE;MESSAGE" "")
-  capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" commit -m "${capp_commit_MESSAGE}"
-    WORKING_DIRECTORY "${CAPP_ROOT}"
-    RESULT_VARIABLE git_commit_result
+  if (NOT capp_add_file_result EQUAL 0)
+    set(${capp_clone_command_RESULT_VARIABLE} ${capp_add_file_result} PARENT_SCOPE)
+    return()
+  endif()
+  capp_commit(
+    MESSAGE "Create skeleton package ${CAPP_PACKAGE_NAME}"
+    RESULT_VARIABLE capp_commit_result
   )
-  set(${capp_commit_RESULT_VARIABLE} ${git_commit_result} PARENT_SCOPE)
+  if (NOT capp_commit_result EQUAL 0)
+    set(${capp_clone_command_RESULT_VARIABLE} ${capp_commit_result} PARENT_SCOPE)
+    return()
+  endif()
+  set(${capp_clone_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
 function(capp_init_command)
@@ -291,6 +308,15 @@ function(capp_init_command)
   file(WRITE "${CAPP_ROOT}/app.cmake" "set(CAPP_APP ${capp_init_command_NAME})")
   capp_add_file(
     FILE "${CAPP_ROOT}/app.cmake"
+    RESULT_VARIABLE capp_add_file_result
+  )
+  if (NOT capp_add_file_result EQUAL 0)
+    set(${capp_init_command_RESULT_VARIABLE} ${capp_add_file_result} PARENT_SCOPE)
+    return()
+  endif()
+  file(WRITE "${CAPP_ROOT}/.gitignore" "source\nbuild\ninstall")
+  capp_add_file(
+    FILE "${CAPP_ROOT}/.gitignore"
     RESULT_VARIABLE capp_add_file_result
   )
   if (NOT capp_add_file_result EQUAL 0)
@@ -338,6 +364,7 @@ else()
   set(CAPP_SOURCE_ROOT "${CAPP_ROOT}/source")
   set(CAPP_BUILD_ROOT "${CAPP_ROOT}/build")
   set(CAPP_INSTALL_ROOT "${CAPP_ROOT}/install")
+  set(CAPP_PACKAGE_ROOT "${CAPP_ROOT}/package")
   if (CAPP_COMMAND STREQUAL "clone")
     capp_clone_command(
       GIT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
