@@ -13,7 +13,7 @@ endif()
 find_package(Git REQUIRED)
 
 function(capp_execute)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_execute "" "WORKING_DIRECTORY;RESULT_VARIABLE" "COMMAND")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_execute "" "WORKING_DIRECTORY;RESULT_VARIABLE;OUTPUT_VARIABLE;ERROR_VARIABLE" "COMMAND")
   string(REPLACE ";" " " capp_execute_printable "${capp_execute_COMMAND}")
   message("executing ${capp_execute_printable}")
   message("in ${capp_execute_WORKING_DIRECTORY}")
@@ -30,6 +30,12 @@ function(capp_execute)
     message("command ${capp_execute_printable} failed: ${capp_execute_result}")
   endif()
   set(${capp_execute_RESULT_VARIABLE} "${capp_execute_result}" PARENT_SCOPE)
+  if (capp_execute_OUTPUT_VARIABLE)
+    set(${capp_execute_OUTPUT_VARIABLE} "${capp_execute_output}" PARENT_SCOPE)
+  endif()
+  if (capp_execute_ERROR_VARIABLE)
+    set(${capp_execute_ERROR_VARIABLE} "${capp_execute_error}" PARENT_SCOPE)
+  endif()
 endfunction()
 
 function(capp_checkout)
@@ -184,10 +190,76 @@ function(capp_write_package_file)
   file(WRITE "${full_directory}/package.cmake" "${file_contents}")
 endfunction()
 
-capp_read_package_file(
-  DIRECTORY trivial-mpi
-)
+function(capp_update_package_commit)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_update_package_commit "" "NAME;RESULT_VARIABLE" "")
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${${capp_update_package_commit_NAME}_DIRECTORY}"
+    RESULT_VARIABLE git_rev_parse_result
+    OUTPUT_VARIABLE git_rev_parse_output
+    )
+  set(${capp_update_package_commit_RESULT_VARIABLE} ${git_rev_parse_result} PARENT_SCOPE)
+  if (git_rev_parse_result EQUAL 0)
+    string(STRIP "${git_rev_parse_output}" git_commit)
+    set(${capp_update_package_commit_NAME}_COMMIT ${git_commit} PARENT_SCOPE)
+  endif()
+endfunction()
 
-capp_write_package_file(
-  NAME TrivialMPI
-)
+function(capp_update_package_git_url)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_update_package_git_url "" "NAME;RESULT_VARIABLE" "")
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" remote show -n origin
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${${capp_update_package_git_url_NAME}_DIRECTORY}"
+    RESULT_VARIABLE git_remote_show_result
+    OUTPUT_VARIABLE git_remote_show_output
+    )
+  set(${capp_update_package_git_url_RESULT_VARIABLE} ${git_remote_show_result} PARENT_SCOPE)
+  if (NOT git_remote_show_result EQUAL 0)
+    return()
+  endif()
+  string(REGEX MATCH "Fetch URL: [^\n]+\n" git_fetch_url "${git_remote_show_output}")
+  string(LENGTH "Fetch URL: " header_length)
+  string(SUBSTRING "${git_fetch_url}" ${header_length} -1 git_url_newline)
+  string(STRIP "${git_url_newline}" git_url)
+  set(${capp_update_package_git_url_NAME}_GIT_URL ${git_url} PARENT_SCOPE)
+endfunction()
+
+function(capp_clone_command)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_clone_command "" "RESULT_VARIABLE" "GIT_ARGUMENTS")
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" clone ${capp_clone_command_GIT_ARGUMENTS}
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
+    RESULT_VARIABLE git_clone_result
+    ERROR_VARIABLE git_clone_error
+  )
+  if (NOT git_clone_result EQUAL 0)
+    set(${capp_clone_command_RESULT_VARIABLE} ${git_clone_result} PARENT_SCOPE)
+    return()
+  endif()
+  string(REGEX MATCH "'[^']+'" git_directory_quoted "${git_clone_error}")
+  string(LENGTH "${git_directory_quoted}" git_directory_quoted_length)
+  math(EXPR git_directory_length "${git_directory_quoted_length} - 2")
+  string(SUBSTRING "${git_directory_quoted}" 1 ${git_directory_length} git_directory)
+  string(REPLACE "-" "_" name_guess "${git_directory}")
+  set(CAPP_PACKAGE_NAME ${name_guess})
+  set(${CAPP_PACKAGE_NAME}_DIRECTORY "${git_directory}")
+  capp_update_package_git_url(
+    NAME ${CAPP_PACKAGE_NAME}
+    RESULT_VARIABLE capp_update_package_git_url_result
+  )
+  if (NOT capp_update_package_git_url_result EQUAL 0)
+    set(${capp_clone_command_RESULT_VARIABLE} ${capp_update_package_git_url_result} PARENT_SCOPE)
+    return()
+  endif()
+  capp_update_package_commit(
+    NAME ${CAPP_PACKAGE_NAME}
+    RESULT_VARIABLE capp_update_package_commit_result
+  )
+  if (NOT capp_update_package_commit_result EQUAL 0)
+    set(${capp_clone_command_RESULT_VARIABLE} ${capp_update_package_commit_result} PARENT_SCOPE)
+    return()
+  endif()
+  capp_write_package_file(NAME ${CAPP_PACKAGE_NAME})
+  set(${capp_clone_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
+endfunction()
+
