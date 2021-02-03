@@ -169,21 +169,25 @@ function(capp_read_package_file)
   set(${CAPP_PACKAGE_NAME}_DIRECTORY ${capp_read_package_file_DIRECTORY} PARENT_SCOPE)
 endfunction()
 
+function(capp_write_package_file)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_write_package_file "" "NAME" "")
+  set(file_contents)
+  set(file_contents "${file_contents}capp_package(\n")
+  set(file_contents "${file_contents}  NAME ${capp_write_package_file_NAME}\n")
+  set(file_contents "${file_contents}  GIT_URL ${${capp_write_package_file_NAME}_GIT_URL}\n")
+  set(file_contents "${file_contents}  COMMIT ${${capp_write_package_file_NAME}_COMMIT}\n")
+  set(file_contents "${file_contents}  OPTIONS ${${capp_write_package_file_NAME}_OPTIONS}\n")
+  set(file_contents "${file_contents}  DEPENDENCIES ${${capp_write_package_file_NAME}_DEPENDENCIES}\n")
+  set(file_contents "${file_contents})\n")
+  set(full_directory "${CAPP_ROOT}/packages/${${capp_write_package_file_NAME}_DIRECTORY}")
+  make_directory("${full_directory}")
+  file(WRITE "${full_directory}/package.cmake" "${file_contents}")
+endfunction()
+
 capp_read_package_file(
   DIRECTORY trivial-mpi
 )
 
-capp_clone_package(
-    NAME TrivialMPI
-    RESULT_VARIABLE capp_clone_package_result
-)
-
-capp_configure_package(
-    NAME TrivialMPI
-    RESULT_VARIABLE capp_configure_package_result
-    )
-
-capp_build_install_package(
-    NAME TrivialMPI
-    RESULT_VARIABLE capp_build_install_result
+capp_write_package_file(
+  NAME TrivialMPI
 )
