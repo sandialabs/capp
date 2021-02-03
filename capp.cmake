@@ -283,14 +283,6 @@ function(capp_clone_command)
     set(${capp_clone_command_RESULT_VARIABLE} ${capp_add_file_result} PARENT_SCOPE)
     return()
   endif()
-  capp_commit(
-    MESSAGE "Create skeleton package ${CAPP_PACKAGE_NAME}"
-    RESULT_VARIABLE capp_commit_result
-  )
-  if (NOT capp_commit_result EQUAL 0)
-    set(${capp_clone_command_RESULT_VARIABLE} ${capp_commit_result} PARENT_SCOPE)
-    return()
-  endif()
   set(${capp_clone_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
