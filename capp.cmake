@@ -107,12 +107,12 @@ function(capp_install)
 endfunction()
 
 function(capp_package)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_package "" "NAME;GIT_URL;COMMIT" "OPTIONS")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_package "" "NAME;GIT_URL;COMMIT" "OPTIONS;DEPENDENCIES")
   set(CAPP_PACKAGE_NAME ${capp_package_NAME} PARENT_SCOPE)
   set(${capp_package_NAME}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
   set(${capp_package_NAME}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
   set(${capp_package_NAME}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
-  set(${capp_package_NAME}_DIRECTORY "${CAPP_PACKAGE_DIRECTORY}" PARENT_SCOPE)
+  set(${capp_package_NAME}_DEPENDENCIES "${capp_package_DEPENDENCIES}" PARENT_SCOPE)
 endfunction()
 
 function(capp_clone_package)
@@ -157,11 +157,20 @@ function(capp_build_install_package)
   set(${capp_build_configure_package_RESULT_VARIABLE} ${capp_install_result} PARENT_SCOPE)
 endfunction()
 
-set(CAPP_PACKAGE_DIRECTORY trivial-mpi)
-capp_package(
-    NAME TrivialMPI
-    GIT_URL git@cee-gitlab.sandia.gov:daibane/trivial-mpi.git
-    COMMIT 2d133d4788014a46b694665d821919f7e0fcc7f3
+function(capp_read_package_file)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_read_package_file "" "DIRECTORY" "")
+  set(capp_read_package_file_path "${CAPP_ROOT}/packages/${capp_read_package_file_DIRECTORY}/package.cmake")
+  include("${capp_read_package_file_path}")
+  set(CAPP_PACKAGE_NAME ${CAPP_PACKAGE_NAME} PARENT_SCOPE)
+  set(${CAPP_PACKAGE_NAME}_GIT_URL ${${CAPP_PACKAGE_NAME}_GIT_URL} PARENT_SCOPE)
+  set(${CAPP_PACKAGE_NAME}_COMMIT ${${CAPP_PACKAGE_NAME}_COMMIT} PARENT_SCOPE)
+  set(${CAPP_PACKAGE_NAME}_OPTIONS "${${CAPP_PACKAGE_NAME}_OPTIONS}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE_NAME}_DEPENDENCIES "${${CAPP_PACKAGE_NAME}_DEPENDENCIES}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE_NAME}_DIRECTORY ${capp_read_package_file_DIRECTORY} PARENT_SCOPE)
+endfunction()
+
+capp_read_package_file(
+  DIRECTORY trivial-mpi
 )
 
 capp_clone_package(
