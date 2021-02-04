@@ -1,4 +1,5 @@
 set(CAPP_BUILD_TYPE Release)
+set(CAPP_TRUE TRUE)
 
 if (WIN32)
   set(CMAKE_PROGRAM_PATH "C:/Program Files") #workaround a workaround for MSVC 2017 in FindGit.cmake
@@ -43,16 +44,6 @@ function(capp_execute)
   endif()
 endfunction()
 
-function(capp_checkout)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_checkout "" "DIRECTORY;COMMIT;RESULT_VARIABLE" "")
-  capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" checkout ${capp_checkout_COMMIT}
-    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_checkout_DIRECTORY}"
-    RESULT_VARIABLE git_checkout_result
-    )
-  set(${capp_checkout_RESULT_VARIABLE} "${git_checkout_result}" PARENT_SCOPE)
-endfunction()
-
 function(capp_add_file)
   cmake_parse_arguments(PARSE_ARGV 0 capp_add_file "" "RESULT_VARIABLE;FILE" "")
   capp_execute(
@@ -74,9 +65,9 @@ function(capp_commit)
 endfunction()
 
 function(capp_clone)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_clone "" "DIRECTORY;GIT_URL;COMMIT;RESULT_VARIABLE" "")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_clone "" "PACKAGE;RESULT_VARIABLE" "")
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" clone -n ${capp_clone_GIT_URL} ${capp_clone_DIRECTORY}
+    COMMAND "${GIT_EXECUTABLE}" clone -n ${${capp_clone_PACKAGE}_GIT_URL} ${capp_clone_PACKAGE}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
     RESULT_VARIABLE git_clone_result
     )
@@ -84,31 +75,37 @@ function(capp_clone)
     set(${capp_clone_RESULT_VARIABLE} "${git_clone_result}" PARENT_SCOPE)
     return()
   endif()
-  capp_checkout(
-      DIRECTORY ${capp_clone_DIRECTORY}
-      COMMIT ${capp_clone_COMMIT}
-      RESULT_VARIABLE capp_checkout_result
-  )
-  set(${capp_clone_RESULT_VARIABLE} "${capp_checkout_result}" PARENT_SCOPE)
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" checkout ${${capp_clone_PACKAGE}_COMMIT}
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_checkout_PACKAGE}"
+    RESULT_VARIABLE git_checkout_result
+    )
+  set(${capp_clone_RESULT_VARIABLE} "${git_checkout_result}" PARENT_SCOPE)
+  if (git_checkout_result EQUAL 0)
+    set(${capp_configure_PACKAGE}_IS_CLONED TRUE PARENT_SCOPE)
+  endif()
 endfunction()
 
 function(capp_configure)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_configure "" "DIRECTORY;RESULT_VARIABLE" "OPTIONS")
-  make_directory("${CAPP_BUILD_ROOT}/${capp_configure_DIRECTORY}")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_configure "" "PACKAGE;RESULT_VARIABLE" "")
+  make_directory("${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}")
   capp_execute(
       COMMAND
       "${CMAKE_COMMAND}"
-      "${CAPP_SOURCE_ROOT}/${capp_configure_DIRECTORY}"
-      "-DCMAKE_INSTALL_PREFIX=${CAPP_INSTALL_ROOT}/${capp_configure_DIRECTORY}"
-      ${capp_configure_OPTIONS}
-      WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_configure_DIRECTORY}"
+      "${CAPP_SOURCE_ROOT}/${capp_configure_PACKAGE}"
+      "-DCMAKE_INSTALL_PREFIX=${CAPP_INSTALL_ROOT}/${capp_configure_PACKAGE}"
+      ${${capp_configure_PACKAGE}_OPTIONS}
+      WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}"
       RESULT_VARIABLE cmake_configure_result
   )
   set(${capp_configure_RESULT_VARIABLE} "${cmake_configure_result}" PARENT_SCOPE)
+  if (cmake_configure_result EQUAL 0)
+    set(${capp_configure_PACKAGE}_IS_CONFIGURED TRUE PARENT_SCOPE)
+  endif()
 endfunction()
 
 function(capp_build)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_build "" "DIRECTORY;RESULT_VARIABLE" "")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_build "" "PACKAGE;RESULT_VARIABLE" "")
   capp_execute(
       COMMAND
       "${CMAKE_COMMAND}"
@@ -116,14 +113,14 @@ function(capp_build)
       "."
       "--config"
       ${CAPP_BUILD_TYPE}
-      WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_build_DIRECTORY}"
+      WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_build_PACKAGE}"
       RESULT_VARIABLE cmake_build_result
   )
   set(${capp_build_RESULT_VARIABLE} "${cmake_build_result}" PARENT_SCOPE)
 endfunction()
 
 function(capp_install)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_install "" "DIRECTORY;RESULT_VARIABLE" "")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_install "" "PACKAGE;RESULT_VARIABLE" "")
   capp_execute(
       COMMAND
       "${CMAKE_COMMAND}"
@@ -131,78 +128,58 @@ function(capp_install)
       "."
       "--config"
       ${CAPP_BUILD_TYPE}
-      WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_install_DIRECTORY}"
+      WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_install_PACKAGE}"
       RESULT_VARIABLE cmake_install_result
   )
   set(${capp_install_RESULT_VARIABLE} "${cmake_install_result}" PARENT_SCOPE)
 endfunction()
 
 function(capp_package)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_package "" "NAME;GIT_URL;COMMIT" "OPTIONS;DEPENDENCIES")
-  set(CAPP_PACKAGE_NAME ${capp_package_NAME} PARENT_SCOPE)
-  set(${capp_package_NAME}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
-  set(${capp_package_NAME}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
-  set(${capp_package_NAME}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
-  set(${capp_package_NAME}_DEPENDENCIES "${capp_package_DEPENDENCIES}" PARENT_SCOPE)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_package "" "GIT_URL;COMMIT" "OPTIONS;DEPENDENCIES")
+  set(${CAPP_PACKAGE}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
+  message("setting ${CAPP_PACKAGE}_DEPENDENCIES=${capp_package_DEPENDENCIES} PARENT_SCOPE in capp_package")
+  set(${CAPP_PACKAGE}_DEPENDENCIES "${capp_package_DEPENDENCIES}" PARENT_SCOPE)
 endfunction()
 
-function(capp_clone_package)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_clone_package "" "NAME;RESULT_VARIABLE" "")
-  capp_clone(
-      DIRECTORY ${${capp_clone_package_NAME}_DIRECTORY}
-      GIT_URL ${${capp_clone_package_NAME}_GIT_URL}
-      COMMIT ${${capp_clone_package_NAME}_COMMIT}
-      RESULT_VARIABLE capp_clone_result
-  )
-  set(${capp_clone_package_RESULT_VARIABLE} ${capp_clone_result} PARENT_SCOPE)
-endfunction()
-
-function(capp_configure_package)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_configure_package "" "NAME;RESULT_VARIABLE" "")
-  capp_configure(
-      DIRECTORY ${${capp_configure_package_NAME}_DIRECTORY}
-      OPTIONS ${${capp_configure_package_NAME}_OPTIONS}
-      RESULT_VARIABLE capp_configure_result
-  )
-  set(${capp_configure_package_RESULT_VARIABLE} ${capp_configure_result} PARENT_SCOPE)
-endfunction()
-
-function(capp_build_install_package)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_build_install_package "" "NAME;RESULT_VARIABLE" "")
-  message("${capp_build_install_package_NAME}_DIRECTORY=${${capp_build_install_package_NAME}_DIRECTORY}")
+function(capp_build_install)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_build_install "" "PACKAGE;RESULT_VARIABLE" "")
   capp_build(
-      DIRECTORY ${${capp_build_install_package_NAME}_DIRECTORY}
-      RESULT_VARIABLE capp_build_result
+    PACKAGE ${capp_build_install_PACKAGE}
+    RESULT_VARIABLE capp_build_result
   )
   if (NOT capp_build_result EQUAL 0)
     message("capp_build_install_packages sees that capp_build failed!")
-    set(${capp_build_configure_package_RESULT_VARIABLE} ${capp_build_result} PARENT_SCOPE)
+    set(${capp_build_install_RESULT_VARIABLE} ${capp_build_result} PARENT_SCOPE)
     return()
   else()
     message("capp_build_install_packages sees that capp_build succeeded!")
   endif()
   capp_install(
-      DIRECTORY ${${capp_build_install_package_NAME}_DIRECTORY}
-      RESULT_VARIABLE capp_install_result
+    PACKAGE ${capp_build_install_PACKAGE}
+    RESULT_VARIABLE capp_install_result
   )
-  set(${capp_build_configure_package_RESULT_VARIABLE} ${capp_install_result} PARENT_SCOPE)
+  set(${capp_build_install_RESULT_VARIABLE} ${capp_install_result} PARENT_SCOPE)
+  if (capp_install_result EQUAL 0)
+    set(${capp_build_install_PACKAGE}_IS_INSTALLED TRUE PARENT_SCOPE)
+  endif()
 endfunction()
 
 function(capp_read_package_file)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_read_package_file "" "DIRECTORY" "")
-  set(capp_read_package_file_path "${CAPP_PACKAGE_ROOT}/${capp_read_package_file_DIRECTORY}/package.cmake")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_read_package_file "" "PACKAGE" "")
+  set(CAPP_PACKAGE ${capp_read_package_file_PACKAGE})
+  set(capp_read_package_file_path "${CAPP_PACKAGE_ROOT}/${CAPP_PACKAGE}/package.cmake")
   include("${capp_read_package_file_path}")
-  set(CAPP_PACKAGE_NAME ${CAPP_PACKAGE_NAME} PARENT_SCOPE)
-  set(${CAPP_PACKAGE_NAME}_GIT_URL ${${CAPP_PACKAGE_NAME}_GIT_URL} PARENT_SCOPE)
-  set(${CAPP_PACKAGE_NAME}_COMMIT ${${CAPP_PACKAGE_NAME}_COMMIT} PARENT_SCOPE)
-  set(${CAPP_PACKAGE_NAME}_OPTIONS "${${CAPP_PACKAGE_NAME}_OPTIONS}" PARENT_SCOPE)
-  set(${CAPP_PACKAGE_NAME}_DEPENDENCIES "${${CAPP_PACKAGE_NAME}_DEPENDENCIES}" PARENT_SCOPE)
-  set(${CAPP_PACKAGE_NAME}_DIRECTORY ${capp_read_package_file_DIRECTORY} PARENT_SCOPE)
-  set(CAPP_PACKAGES ${CAPP_PACKAGES} ${CAPP_PACKAGE_NAME} PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_GIT_URL ${${CAPP_PACKAGE}_GIT_URL} PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_COMMIT ${${CAPP_PACKAGE}_COMMIT} PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_OPTIONS "${${CAPP_PACKAGE}_OPTIONS}" PARENT_SCOPE)
+  message("setting ${CAPP_PACKAGE}_DEPENDENCIES=${${CAPP_PACKAGE}_DEPENDENCIES} PARENT_SCOPE in capp_read_package_file")
+  set(${CAPP_PACKAGE}_DEPENDENCIES "${${CAPP_PACKAGE}_DEPENDENCIES}" PARENT_SCOPE)
+  set(CAPP_PACKAGES ${CAPP_PACKAGES} ${CAPP_PACKAGE} PARENT_SCOPE)
 endfunction()
 
 macro(capp_find_root)
-  set(CAPP_TRUE TRUE)
   while (CAPP_TRUE)
     get_filename_component(CAPP_ROOT_PARENT "${CAPP_ROOT}" DIRECTORY)
     if (CAPP_ROOT_PARENT STREQUAL CAPP_ROOT)
@@ -228,10 +205,103 @@ macro(capp_read_package_files)
       RESULT_VARIABLE package_directories
     )
     foreach(package_directory IN LISTS package_directories)
-      capp_read_package_file(DIRECTORY ${package_directory})
+      capp_read_package_file(PACKAGE ${package_directory})
     endforeach()
   endif()
 endmacro()
+
+function(capp_initialize_needs)
+  foreach(package IN LISTS CAPP_PACKAGES)
+    if (IS_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}")
+      set(${package}_IS_CLONED TRUE PARENT_SCOPE)
+    else()
+      set(${package}_IS_CLONED FALSE PARENT_SCOPE)
+    endif()
+  endforeach()
+  foreach(package IN LISTS CAPP_PACKAGES)
+    if (${package}_IS_CLONED AND IS_DIRECTORY "${CAPP_BUILD_ROOT}/${package}")
+      set(${package}_IS_CONFIGURED TRUE PARENT_SCOPE)
+    else()
+      set(${package}_IS_CONFIGURED FALSE PARENT_SCOPE)
+    endif()
+  endforeach()
+  foreach(package IN LISTS CAPP_PACKAGES)
+    if (${package}_IS_CONFIGURED AND IS_DIRECTORY "${CAPP_INSTALL_ROOT}/${package}")
+      set(${package}_IS_INSTALLED TRUE PARENT_SCOPE)
+    else()
+      set(${package}_IS_INSTALLED FALSE PARENT_SCOPE)
+    endif()
+  endforeach()
+endfunction()
+
+function(capp_fulfill_needs)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_fulfill_needs "" "RETURN_VARIABLE" "")
+  while (CAPP_TRUE)
+    message("going through all packages...")
+    foreach(package IN LISTS CAPP_PACKAGES)
+      message("${package}_IS_CLONED=${${package}_IS_CLONED}")
+      if (NOT ${package}_IS_CLONED)
+        capp_clone(
+          PACKAGE ${package}
+          RESULT_VARIABLE capp_clone_result
+        )
+        if (NOT capp_clone_result EQUAL 0)
+          set(${${capp_fulfill_needs}_RETURN_VARIABLE} "${capp_clone_result}" PARENT_SCOPE)
+          return()
+        endif()
+      endif()
+      set(dependencies_installed TRUE)
+      message("dependencies of ${package}: ${${package}_DEPENDENCIES}")
+      foreach (dependency IN LISTS ${package}_DEPENDENCIES)
+        message("check dependency ${dependency}")
+        if (${dependency}_IS_INSTALLED)
+          message("dependency ${dependency} is installed")
+        else()
+          message("dependency ${dependency} is NOT installed")
+          set(dependencies_installed FALSE)
+        endif()
+      endforeach()
+      if (NOT dependencies_installed)
+        message("not all dependencies of ${package} are installed, continuing to next package")
+        continue()
+      endif()
+      message("all dependencies of ${package} are installed, moving to config")
+      message("${package}_IS_CONFIGURED=${${package}_IS_CONFIGURED}")
+      if (NOT ${package}_IS_CONFIGURED)
+        capp_configure(
+          PACKAGE ${package}
+          RESULT_VARIABLE capp_configure_result
+        )
+        if (NOT capp_configure_result EQUAL 0)
+          set(${${capp_fulfill_needs}_RETURN_VARIABLE} "${capp_configure_result}" PARENT_SCOPE)
+          return()
+        endif()
+        set(${package}_IS_CONFIGURED ${${package}_IS_CONFIGURED} PARENT_SCOPE)
+      endif()
+      message("${package}_IS_INSTALLED=${${package}_IS_INSTALLED}")
+      if (NOT ${package}_IS_INSTALLED)
+        capp_build_install(
+          PACKAGE ${package}
+          RESULT_VARIABLE capp_build_install_result
+        )
+        if (NOT capp_build_install_result EQUAL 0)
+          set(${${capp_fulfill_needs}_RETURN_VARIABLE} "${capp_build_install_result}" PARENT_SCOPE)
+          return()
+        endif()
+        set(${package}_IS_INSTALLED ${${package}_IS_INSTALLED} PARENT_SCOPE)
+      endif()
+    endforeach()
+    set(all_done TRUE)
+    foreach(package IN LISTS CAPP_PACKAGES)
+      if (NOT ${package}_IS_INSTALLED)
+        set(all_done FALSE)
+      endif()
+    endforeach()
+    if (all_done)
+      break()
+    endif()
+  endwhile()
+endfunction()
 
 function(capp_write_package_file)
   cmake_parse_arguments(PARSE_ARGV 0 capp_write_package_file "" "NAME" "")
@@ -387,9 +457,14 @@ if (CAPP_COMMAND STREQUAL "init")
 else()
   capp_find_root()
   capp_read_package_files()
+  capp_initialize_needs()
   if (CAPP_COMMAND STREQUAL "clone")
     capp_clone_command(
       GIT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+      RESULT_VARIABLE capp_command_result
+    )
+  elseif(CAPP_COMMAND STREQUAL "build")
+    capp_fulfill_needs(
       RESULT_VARIABLE capp_command_result
     )
   else()
