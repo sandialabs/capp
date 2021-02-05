@@ -94,6 +94,7 @@ function(capp_configure)
       "${CMAKE_COMMAND}"
       "${CAPP_SOURCE_ROOT}/${capp_configure_PACKAGE}"
       "-DCMAKE_INSTALL_PREFIX=${CAPP_INSTALL_ROOT}/${capp_configure_PACKAGE}"
+      "-DCMAKE_BUILD_TYPE=${CAPP_BUILD_TYPE}"
       ${${capp_configure_PACKAGE}_OPTIONS}
       WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}"
       RESULT_VARIABLE cmake_configure_result
@@ -276,7 +277,6 @@ function(capp_fulfill_needs)
           PACKAGE ${package}
           RESULT_VARIABLE capp_build_install_result
         )
-        message("capp_build_install_result=${capp_build_install_result}")
         if (NOT capp_build_install_result EQUAL 0)
           set(${capp_fulfill_needs_RESULT_VARIABLE} "${capp_build_install_result}" PARENT_SCOPE)
           return()
