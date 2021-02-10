@@ -135,6 +135,12 @@ function(capp_install)
   set(${capp_install_RESULT_VARIABLE} "${cmake_install_result}" PARENT_SCOPE)
 endfunction()
 
+function(capp_app)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_app "" "NAME" "ROOT_PACKAGES")
+  set(CAPP_APP_NAME ${capp_app_NAME} PARENT_SCOPE)
+  set(CAPP_ROOT_PACKAGES "${capp_app_ROOT_PACKAGES}" PARENT_SCOPE)
+endfunction()
+
 function(capp_package)
   cmake_parse_arguments(PARSE_ARGV 0 capp_package "" "GIT_URL;COMMIT" "OPTIONS;DEPENDENCIES")
   set(${CAPP_PACKAGE}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
@@ -194,16 +200,20 @@ macro(capp_find_root)
   set(CAPP_PACKAGE_ROOT "${CAPP_ROOT}/package")
 endmacro()
 
-macro(capp_read_package_files)
-  if (IS_DIRECTORY "${CAPP_PACKAGE_ROOT}")
-    capp_subdirectories(
-      PARENT_DIRECTORY "${CAPP_PACKAGE_ROOT}"
-      RESULT_VARIABLE package_directories
-    )
-    foreach(package_directory IN LISTS package_directories)
-      capp_read_package_file(PACKAGE ${package_directory})
+macro(capp_recursive_read_package_file package)
+  list(FIND CAPP_PACKAGES ${package} list_index)
+  if (list_index EQUAL -1)
+    capp_read_package_file(PACKAGE ${package})
+    foreach(dependency IN LISTS ${package}_DEPENDENCIES)
+      capp_recursive_read_package_file(${dependency})
     endforeach()
   endif()
+endmacro()
+
+macro(capp_read_package_files)
+  foreach(root_package IN LISTS CAPP_ROOT_PACKAGES)
+    capp_recursive_read_package_file(${root_package})
+  endforeach()
 endmacro()
 
 function(capp_initialize_needs)
@@ -406,7 +416,7 @@ function(capp_init_command)
     set(${capp_init_command_RESULT_VARIABLE} ${git_init_result} PARENT_SCOPE)
     return()
   endif()
-  file(WRITE "${CAPP_ROOT}/app.cmake" "set(CAPP_APP ${capp_init_command_NAME})")
+  file(WRITE "${CAPP_ROOT}/app.cmake" "capp_app(\n  NAME ${capp_init_command_NAME}\n  ROOT_PACKAGES\n  )")
   capp_add_file(
     FILE "${CAPP_ROOT}/app.cmake"
     RESULT_VARIABLE capp_add_file_result
