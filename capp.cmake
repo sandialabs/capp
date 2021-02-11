@@ -90,12 +90,17 @@ endfunction()
 function(capp_configure)
   cmake_parse_arguments(PARSE_ARGV 0 capp_configure "" "PACKAGE;RESULT_VARIABLE" "")
   make_directory("${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}")
+  if (WIN32)
+    set(build_type_option)
+  else()
+    set(build_type_option "-DCMAKE_BUILD_TYPE=${CAPP_BUILD_TYPE}")
+  endif()
   capp_execute(
       COMMAND
       "${CMAKE_COMMAND}"
       "${CAPP_SOURCE_ROOT}/${capp_configure_PACKAGE}"
       "-DCMAKE_INSTALL_PREFIX=${CAPP_INSTALL_ROOT}/${capp_configure_PACKAGE}"
-      "-DCMAKE_BUILD_TYPE=${CAPP_BUILD_TYPE}"
+      ${build_type_option}
       ${${capp_configure_PACKAGE}_OPTIONS}
       WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}"
       RESULT_VARIABLE cmake_configure_result
