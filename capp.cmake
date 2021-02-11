@@ -328,30 +328,30 @@ function(capp_write_package_file)
   file(WRITE "${full_directory}/package.cmake" "${file_contents}")
 endfunction()
 
-function(capp_update_package_commit)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_update_package_commit "" "NAME;RESULT_VARIABLE" "")
+function(capp_get_commit)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_get_commit "" "NAME;COMMIT_VARIABLE;RESULT_VARIABLE" "")
   capp_execute(
     COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
-    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${${capp_update_package_commit_NAME}_DIRECTORY}"
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${${capp_get_commit_NAME}_DIRECTORY}"
     RESULT_VARIABLE git_rev_parse_result
     OUTPUT_VARIABLE git_rev_parse_output
     )
-  set(${capp_update_package_commit_RESULT_VARIABLE} ${git_rev_parse_result} PARENT_SCOPE)
+  set(${capp_get_commit_RESULT_VARIABLE} ${git_rev_parse_result} PARENT_SCOPE)
   if (git_rev_parse_result EQUAL 0)
     string(STRIP "${git_rev_parse_output}" git_commit)
-    set(${capp_update_package_commit_NAME}_COMMIT ${git_commit} PARENT_SCOPE)
+    set(${capp_get_commit_COMMIT_VARIABLE} ${git_commit} PARENT_SCOPE)
   endif()
 endfunction()
 
-function(capp_update_package_git_url)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_update_package_git_url "" "NAME;RESULT_VARIABLE" "")
+function(capp_get_git_url)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_get_git_url "" "NAME;GIT_URL_VARIABLE;RESULT_VARIABLE" "")
   capp_execute(
     COMMAND "${GIT_EXECUTABLE}" remote show -n origin
-    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${${capp_update_package_git_url_NAME}_DIRECTORY}"
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${${capp_get_git_url_NAME}_DIRECTORY}"
     RESULT_VARIABLE git_remote_show_result
     OUTPUT_VARIABLE git_remote_show_output
     )
-  set(${capp_update_package_git_url_RESULT_VARIABLE} ${git_remote_show_result} PARENT_SCOPE)
+  set(${capp_get_git_url_RESULT_VARIABLE} ${git_remote_show_result} PARENT_SCOPE)
   if (NOT git_remote_show_result EQUAL 0)
     return()
   endif()
@@ -359,7 +359,7 @@ function(capp_update_package_git_url)
   string(LENGTH "Fetch URL: " header_length)
   string(SUBSTRING "${git_fetch_url}" ${header_length} -1 git_url_newline)
   string(STRIP "${git_url_newline}" git_url)
-  set(${capp_update_package_git_url_NAME}_GIT_URL ${git_url} PARENT_SCOPE)
+  set(${capp_get_git_url_GIT_URL_VARIABLE} ${git_url} PARENT_SCOPE)
 endfunction()
 
 function(capp_clone_command)
@@ -382,20 +382,22 @@ function(capp_clone_command)
   string(REPLACE "-" "_" name_guess "${git_directory}")
   set(CAPP_PACKAGE_NAME ${name_guess})
   set(${CAPP_PACKAGE_NAME}_DIRECTORY "${git_directory}")
-  capp_update_package_git_url(
+  capp_get_git_url(
     NAME ${CAPP_PACKAGE_NAME}
-    RESULT_VARIABLE capp_update_package_git_url_result
+    GIT_URL_VARIABLE ${CAPP_PACKAGE_NAME}_GIT_URL
+    RESULT_VARIABLE capp_get_git_url_result
   )
-  if (NOT capp_update_package_git_url_result EQUAL 0)
-    set(${capp_clone_command_RESULT_VARIABLE} ${capp_update_package_git_url_result} PARENT_SCOPE)
+  if (NOT capp_get_git_url_result EQUAL 0)
+    set(${capp_clone_command_RESULT_VARIABLE} ${capp_get_git_url_result} PARENT_SCOPE)
     return()
   endif()
-  capp_update_package_commit(
+  capp_get_commit(
     NAME ${CAPP_PACKAGE_NAME}
-    RESULT_VARIABLE capp_update_package_commit_result
+    COMMIT_VARIABLE ${CAPP_PACKAGE_NAME}_COMMIT
+    RESULT_VARIABLE capp_get_commit_result
   )
-  if (NOT capp_update_package_commit_result EQUAL 0)
-    set(${capp_clone_command_RESULT_VARIABLE} ${capp_update_package_commit_result} PARENT_SCOPE)
+  if (NOT capp_get_commit_result EQUAL 0)
+    set(${capp_clone_command_RESULT_VARIABLE} ${capp_get_commit_result} PARENT_SCOPE)
     return()
   endif()
   capp_write_package_file(NAME ${CAPP_PACKAGE_NAME})
