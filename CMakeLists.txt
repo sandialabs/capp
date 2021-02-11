@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.12.0...3.19.4)
 project(CAPP VERSION 1.0.0 LANGUAGES)
 install(FILES capp.cmake DESTINATION bin)
+file(TO_NATIVE_PATH "${CMAKE_COMMAND}" NATIVE_CMAKE_COMMAND)
+file(TO_NATIVE_PATH "${CMAKE_INSTALL_PREFIX}" NATIVE_INSTALL_PREFIX)
 if (WIN32)
   configure_file(capp.bat.in "${CMAKE_CURRENT_BINARY_DIR}/capp.bat")
   install(
