@@ -77,7 +77,7 @@ function(capp_clone)
   endif()
   capp_execute(
     COMMAND "${GIT_EXECUTABLE}" checkout ${${capp_clone_PACKAGE}_COMMIT}
-    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_checkout_PACKAGE}"
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_clone_PACKAGE}"
     RESULT_VARIABLE git_checkout_result
     )
   set(${capp_clone_RESULT_VARIABLE} "${git_checkout_result}" PARENT_SCOPE)
