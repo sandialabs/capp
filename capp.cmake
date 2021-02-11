@@ -83,7 +83,7 @@ function(capp_clone)
     )
   set(${capp_clone_RESULT_VARIABLE} "${git_checkout_result}" PARENT_SCOPE)
   if (git_checkout_result EQUAL 0)
-    set(${capp_configure_PACKAGE}_IS_CLONED TRUE PARENT_SCOPE)
+    set(${capp_clone_PACKAGE}_IS_CLONED TRUE PARENT_SCOPE)
   endif()
 endfunction()
 
