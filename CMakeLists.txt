@@ -1,0 +1,32 @@
+cmake_minimum_required(VERSION 3.12.0...3.19.4)
+project(CAPP VERSION 1.0.0 LANGUAGES)
+install(FILES capp.cmake DESTINATION bin)
+if (WIN32)
+  configure_file(capp.bat.in "${CMAKE_CURRENT_BINARY_DIR}/capp.bat")
+  install(
+    FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/capp.bat"
+    PERMISSIONS
+    OWNER_READ
+    OWNER_WRITE
+    OWNER_EXECUTE
+    GROUP_READ
+    GROUP_EXECUTE
+    WORLD_READ
+    WORLD_EXECUTE
+    DESTINATION bin)
+else()
+  configure_file(capp.sh.in "${CMAKE_CURRENT_BINARY_DIR}/capp")
+  install(
+    FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/capp"
+    PERMISSIONS
+    OWNER_READ
+    OWNER_WRITE
+    OWNER_EXECUTE
+    GROUP_READ
+    GROUP_EXECUTE
+    WORLD_READ
+    WORLD_EXECUTE
+    DESTINATION bin)
+endif()
