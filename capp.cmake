@@ -485,6 +485,63 @@ function(capp_commit_command)
   set(${capp_commit_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
+function(capp_checkout_command)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_checkout_command "" "RESULT_VARIABLE" "")
+  foreach(package IN LISTS CAPP_PACKAGES)
+    capp_get_commit(
+      PACKAGE ${package}
+      COMMIT_VARIABLE current_commit
+      RESULT_VARIABLE get_commit_result
+      )
+    if (NOT get_commit_result EQUAL 0)
+      set(${capp_checkout_command_RESULT_VARIABLE} "${get_commit_result}" PARENT_SCOPE)
+      return()
+    endif()
+    if (NOT current_commit STREQUAL ${package}_COMMIT)
+      capp_get_git_url(
+        PACKAGE ${package}
+        GIT_URL_VARIABLE current_git_url
+        RESULT_VARIABLE get_git_url_result
+        )
+      if (NOT get_git_url_result EQUAL 0)
+        set(${capp_checkout_command_RESULT_VARIABLE} "${get_git_url_result}" PARENT_SCOPE)
+        return()
+      endif()
+      if (current_git_url STREQUAL ${package}_GIT_URL)
+        capp_execute(
+          COMMAND "${GIT_EXECUTABLE}" fetch origin
+          WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+          RESULT_VARIABLE fetch_result
+          )
+        if (NOT fetch_result EQUAL 0)
+          set(${capp_checkout_command_RESULT_VARIABLE} "${fetch_result}" PARENT_SCOPE)
+          return()
+        endif()
+        capp_execute(
+          COMMAND "${GIT_EXECUTABLE}" checkout ${${package}_COMMIT}
+          WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+          RESULT_VARIABLE checkout_result
+          )
+        if (NOT checkout_result EQUAL 0)
+          set(${capp_checkout_command_RESULT_VARIABLE} "${checkout_result}" PARENT_SCOPE)
+          return()
+        endif()
+      else()
+        file(REMOVE_RECURSE "${CAPP_SOURCE_ROOT}/${package}")
+        capp_clone(
+          PACKAGE ${package}
+          RESULT_VARIABLE clone_result
+          )
+        if (NOT clone_result EQUAL 0)
+          set(${capp_checkout_command_RESULT_VARIABLE} "${clone_result}" PARENT_SCOPE)
+          return()
+        endif()
+      endif()
+    endif()
+  endforeach()
+  set(${capp_checkout_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
+endfunction()
+
 math(EXPR ARGC_MINUS_ONE "${CMAKE_ARGC} - 1")
 if (CMAKE_ARGC LESS 4)
   message(FATAL_ERROR "No command specified!")
@@ -518,6 +575,10 @@ else()
   elseif(CAPP_COMMAND STREQUAL "commit")
     capp_commit_command(
       PACKAGE ${CAPP_COMMAND_ARGUMENTS}
+      RESULT_VARIABLE capp_command_result
+    )
+  elseif(CAPP_COMMAND STREQUAL "checkout")
+    capp_checkout_command(
       RESULT_VARIABLE capp_command_result
     )
   else()
