@@ -1,1 +1,1 @@
-@CMAKE_COMMAND@ -P @CMAKE_INSTALL_PREFIX@\bin\capp.cmake %*
+"@CMAKE_COMMAND@" -P "@CMAKE_INSTALL_PREFIX@\bin\capp.cmake" %*
