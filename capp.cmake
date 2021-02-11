@@ -66,6 +66,7 @@ endfunction()
 
 function(capp_clone)
   cmake_parse_arguments(PARSE_ARGV 0 capp_clone "" "PACKAGE;RESULT_VARIABLE" "")
+  make_directory("${CAPP_SOURCE_ROOT}")
   capp_execute(
     COMMAND "${GIT_EXECUTABLE}" clone -n ${${capp_clone_PACKAGE}_GIT_URL} ${capp_clone_PACKAGE}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
