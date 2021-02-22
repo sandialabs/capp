@@ -173,7 +173,7 @@ function(capp_build_install)
   set(${capp_build_install_RESULT_VARIABLE} ${capp_install_result} PARENT_SCOPE)
   if (capp_install_result EQUAL 0)
     set(${capp_build_install_PACKAGE}_IS_INSTALLED TRUE PARENT_SCOPE)
-    file(WRITE "${CAPP_INSTALL_ROOT}/${capp_configure_PACKAGE}/capp_installed.txt" "Yes")
+    file(WRITE "${CAPP_INSTALL_ROOT}/${capp_build_install_PACKAGE}/capp_installed.txt" "Yes")
   endif()
 endfunction()
 
