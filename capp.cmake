@@ -108,6 +108,7 @@ function(capp_configure)
   set(${capp_configure_RESULT_VARIABLE} "${cmake_configure_result}" PARENT_SCOPE)
   if (cmake_configure_result EQUAL 0)
     set(${capp_configure_PACKAGE}_IS_CONFIGURED TRUE PARENT_SCOPE)
+    file(WRITE "${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}/capp_configured.txt" "Yes")
   endif()
 endfunction()
 
@@ -172,6 +173,7 @@ function(capp_build_install)
   set(${capp_build_install_RESULT_VARIABLE} ${capp_install_result} PARENT_SCOPE)
   if (capp_install_result EQUAL 0)
     set(${capp_build_install_PACKAGE}_IS_INSTALLED TRUE PARENT_SCOPE)
+    file(WRITE "${CAPP_INSTALL_ROOT}/${capp_configure_PACKAGE}/capp_installed.txt" "Yes")
   endif()
 endfunction()
 
@@ -231,14 +233,14 @@ function(capp_initialize_needs)
     endif()
   endforeach()
   foreach(package IN LISTS CAPP_PACKAGES)
-    if (${package}_IS_CLONED AND IS_DIRECTORY "${CAPP_BUILD_ROOT}/${package}")
+    if (${package}_IS_CLONED AND EXISTS "${CAPP_BUILD_ROOT}/${package}/capp_configured.txt")
       set(${package}_IS_CONFIGURED TRUE)
     else()
       set(${package}_IS_CONFIGURED FALSE)
     endif()
   endforeach()
   foreach(package IN LISTS CAPP_PACKAGES)
-    if (${package}_IS_CONFIGURED AND IS_DIRECTORY "${CAPP_INSTALL_ROOT}/${package}")
+    if (${package}_IS_CONFIGURED AND EXISTS "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
       set(${package}_IS_INSTALLED TRUE)
     else()
       set(${package}_IS_INSTALLED FALSE)
@@ -488,6 +490,34 @@ endfunction()
 function(capp_checkout_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_checkout_command "" "RESULT_VARIABLE" "")
   foreach(package IN LISTS CAPP_PACKAGES)
+    set(needs_reclone FALSE)
+    if (EXISTS "${CAPP_INSTALL_ROOT}/${package}")
+      capp_get_git_url(
+        PACKAGE ${package}
+        GIT_URL_VARIABLE current_git_url
+        RESULT_VARIABLE get_git_url_result
+        )
+      if (NOT get_git_url_result EQUAL 0)
+        set(${capp_checkout_command_RESULT_VARIABLE} "${get_git_url_result}" PARENT_SCOPE)
+        return()
+      endif()
+      if (NOT current_git_url STREQUAL ${package}_GIT_URL)
+        set(needs_reclone TRUE)
+      endif()
+    else()
+      set(needs_reclone TRUE)
+    endif()
+    if (needs_reclone)
+      file(REMOVE_RECURSE "${CAPP_SOURCE_ROOT}/${package}")
+      capp_clone(
+        PACKAGE ${package}
+        RESULT_VARIABLE clone_result
+        )
+      if (NOT clone_result EQUAL 0)
+        set(${capp_checkout_command_RESULT_VARIABLE} "${clone_result}" PARENT_SCOPE)
+        return()
+      endif()
+    endif()
     capp_get_commit(
       PACKAGE ${package}
       COMMIT_VARIABLE current_commit
@@ -498,46 +528,25 @@ function(capp_checkout_command)
       return()
     endif()
     if (NOT current_commit STREQUAL ${package}_COMMIT)
-      capp_get_git_url(
-        PACKAGE ${package}
-        GIT_URL_VARIABLE current_git_url
-        RESULT_VARIABLE get_git_url_result
+      capp_execute(
+        COMMAND "${GIT_EXECUTABLE}" fetch origin
+        WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+        RESULT_VARIABLE fetch_result
         )
-      if (NOT get_git_url_result EQUAL 0)
-        set(${capp_checkout_command_RESULT_VARIABLE} "${get_git_url_result}" PARENT_SCOPE)
+      if (NOT fetch_result EQUAL 0)
+        set(${capp_checkout_command_RESULT_VARIABLE} "${fetch_result}" PARENT_SCOPE)
         return()
       endif()
-      if (current_git_url STREQUAL ${package}_GIT_URL)
-        capp_execute(
-          COMMAND "${GIT_EXECUTABLE}" fetch origin
-          WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-          RESULT_VARIABLE fetch_result
-          )
-        if (NOT fetch_result EQUAL 0)
-          set(${capp_checkout_command_RESULT_VARIABLE} "${fetch_result}" PARENT_SCOPE)
-          return()
-        endif()
-        capp_execute(
-          COMMAND "${GIT_EXECUTABLE}" checkout ${${package}_COMMIT}
-          WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-          RESULT_VARIABLE checkout_result
-          )
-        if (NOT checkout_result EQUAL 0)
-          set(${capp_checkout_command_RESULT_VARIABLE} "${checkout_result}" PARENT_SCOPE)
-          return()
-        endif()
-      else()
-        file(REMOVE_RECURSE "${CAPP_SOURCE_ROOT}/${package}")
-        capp_clone(
-          PACKAGE ${package}
-          RESULT_VARIABLE clone_result
-          )
-        if (NOT clone_result EQUAL 0)
-          set(${capp_checkout_command_RESULT_VARIABLE} "${clone_result}" PARENT_SCOPE)
-          return()
-        endif()
+      capp_execute(
+        COMMAND "${GIT_EXECUTABLE}" checkout ${${package}_COMMIT}
+        WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+        RESULT_VARIABLE checkout_result
+        )
+      if (NOT checkout_result EQUAL 0)
+        set(${capp_checkout_command_RESULT_VARIABLE} "${checkout_result}" PARENT_SCOPE)
+        return()
       endif()
-      file(REMOVE_RECURSE "${CAPP_INSTALL_ROOT}/${package}")
+      file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
     endif()
   endforeach()
   set(${capp_checkout_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
