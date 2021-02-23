@@ -7,9 +7,10 @@ by building packages just to support one application, hence "C Application".
 CApp uses CMake and Git, and is actually written in the CMake language for portability.
 It assumes all packages have source stored Git repositories and are compiled with CMake.
 
-#Usage
+# Usage
 
-##Installing
+## Installing
+
 CApp itself is fairly easy to install using CMake:
 
 ```bash
@@ -22,7 +23,7 @@ cmake --install .
 On Windows, this will install `capp.bat` to the `bin` directory and
 elsewhere it will install `capp`.
 
-##Building an Application Repository
+## Building an Application Repository
 
 The first step to using CApp is to create a repository that describes the packages needed
 for the application.
@@ -37,13 +38,14 @@ git commit -a -m "initial application commit"
 ```
 
 The easiest way to add a new package to the application repository is via `capp clone`:
+
 ```bash
 capp clone git@github.com:Unidata/netcdf-c.git
 vim package/netcdf-c/package.cmake 
 git commit -a -m "added netcdf package"
 ```
 
-##Installing an Application
+## Installing an Application
 
 With a copy of the application repository available, CApp can build it with the `capp build` command.
 
