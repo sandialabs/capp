@@ -53,3 +53,16 @@ With a copy of the application repository available, CApp can build it with the 
 cd my-application
 capp build
 ```
+
+## Working with an Application
+
+Another key use case of CApp is actual application development.
+One key function is updating which version of a package the application repository points to:
+
+```bash
+cd my-application
+cd source/package1
+git pull
+capp commit package1
+git commit -a -m "updated version of package1"
+```
