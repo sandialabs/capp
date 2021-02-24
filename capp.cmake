@@ -274,12 +274,13 @@ function(capp_initialize_needs)
   endforeach()
   foreach(package IN LISTS CAPP_PACKAGES)
     if (${package}_IS_CLONED AND
+        EXISTS "${CAPP_BUILD_ROOT}/${package}/capp_configured.txt" AND
         "${CAPP_BUILD_ROOT}/${package}/capp_configured.txt" IS_NEWER_THAN "${CAPP_ROOT}/app.cmake" AND
         "${CAPP_BUILD_ROOT}/${package}/capp_configured.txt" IS_NEWER_THAN "${CAPP_PACKAGE_ROOT}/${package}/package.cmake")
       set(${package}_IS_CONFIGURED TRUE)
     else()
       set(${package}_IS_CONFIGURED FALSE)
-      file(REMOVE "${CAPP_BUILD_ROOT}/${package}/capp_configured.txt")
+      file(REMOVE_RECURSE "${CAPP_BUILD_ROOT}/${package}")
     endif()
   endforeach()
   foreach(package IN LISTS CAPP_PACKAGES)
@@ -288,12 +289,13 @@ function(capp_initialize_needs)
       OUTPUT_VARIABLE dependencies_installed)
     if (${package}_IS_CONFIGURED AND
         dependencies_installed AND
+        EXISTS "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt" AND
         "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt" IS_NEWER_THAN "${CAPP_ROOT}/app.cmake" AND
         "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt" IS_NEWER_THAN "${CAPP_PACKAGE_ROOT}/${package}/package.cmake")
       set(${package}_IS_INSTALLED TRUE)
     else()
       set(${package}_IS_INSTALLED FALSE)
-      file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
+      file(REMOVE_RECURSE "${CAPP_INSTALL_ROOT}/${package}")
     endif()
   endforeach()
   foreach(package IN LISTS CAPP_PACKAGES)
@@ -561,7 +563,7 @@ function(capp_checkout_command)
         set(${capp_checkout_command_RESULT_VARIABLE} "${clone_result}" PARENT_SCOPE)
         return()
       endif()
-      file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
+      file(REMOVE_RECURSE "${CAPP_INSTALL_ROOT}/${package}")
     endif()
     capp_get_commit(
       PACKAGE ${package}
@@ -591,7 +593,7 @@ function(capp_checkout_command)
         set(${capp_checkout_command_RESULT_VARIABLE} "${checkout_result}" PARENT_SCOPE)
         return()
       endif()
-      file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
+      file(REMOVE_RECURSE "${CAPP_INSTALL_ROOT}/${package}")
     endif()
   endforeach()
   set(${capp_checkout_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
