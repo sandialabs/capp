@@ -33,7 +33,7 @@ cmake --install .
 On Windows, this will install `capp.bat` to the `bin` directory and
 elsewhere it will install `capp`.
 
-## Building an Application Repository
+## Setting Up an Application
 
 The first step to using CApp is to create a repository that describes the packages needed
 for the application.
@@ -67,7 +67,7 @@ cd my-application
 capp build
 ```
 
-## Working with an Application
+## Developing an Application
 
 Another key use case of CApp is actual application development.
 
