@@ -59,7 +59,36 @@ capp build
 ## Working with an Application
 
 Another key use case of CApp is actual application development.
-One key function is updating which version of a package the application repository points to:
+
+### Rebuilding a Package
+
+Users of CApp are encouraged to edit package source code in the
+the `source/` subdirectory of the application repository and follow
+the normal Git workflow for each package as desired.
+At some point, to see the effects of the source code changes,
+users may want to rebuild a package and all downstream dependencies.
+This can be done with the `capp rebuild` command:
+
+```bash
+cd my-application
+cd source/package1
+vim package_function.c
+capp rebuild package1
+```
+
+### Reconfiguring a Package
+
+Sometimes a change to a package is substantial enough that it requires
+CMake reconfiguration in order to properly update the build.
+This can be done with the `capp reconfig` command, which works just
+like `capp rebuild` but will force a fresh CMake configuration of
+the package prior to rebuilding.
+
+### Accepting a New Package Version
+
+One key function is updating which version of a package the application repository points to,
+This is done by the `capp commit` command, which will update the git URL and git commit that
+the application repository points to.
 
 ```bash
 cd my-application
