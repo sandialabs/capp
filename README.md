@@ -1,11 +1,17 @@
 CApp
 ====
 
-# Purpose
+# Overview
 CApp is like a package manager, but it avoids a lot of package manager responsibilities
-by building packages just to support one application, hence "C Application".
-CApp uses CMake and Git, and is actually written in the CMake language for portability.
-It assumes all packages have source stored Git repositories and are compiled with CMake.
+by building packages just to support one application, hence the name is a shortening of "C Application".
+CApp depends only on CMake and Git, and is actually written in the CMake language for portability.
+It assumes all packages have source code stored in Git repositories and are compiled with CMake.
+CApp is built around the notion of an application repository, which is a Git repository
+containing "package files": CMake language files which describe packages needed
+to build the application, their exact version expressed as a Git commit,
+their dependencies, and the CMake arguments needed to configure each package.
+By knowing only about exactly one version of each package, CApp avoids any responsibilities
+related to version compatibility resolution.
 
 # Usage
 
