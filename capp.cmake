@@ -603,6 +603,28 @@ else()
     capp_fulfill_needs(
       RESULT_VARIABLE capp_command_result
     )
+  elseif(CAPP_COMMAND STREQUAL "rebuild")
+    set(rebuild_list "${CAPP_COMMAND_ARGUMENTS}")
+    if (NOT rebuild_list)
+      set(rebuild_list "${CAPP_PACKAGES}")
+    endif()
+    foreach (package IN LISTS rebuild_list)
+      file(REMOVE_RECURSE "${CAPP_INSTALL_ROOT}/${package}")
+    endforeach()
+    capp_fulfill_needs(
+      RESULT_VARIABLE capp_command_result
+    )
+  elseif(CAPP_COMMAND STREQUAL "reconfig")
+    set(reconfig_list "${CAPP_COMMAND_ARGUMENTS}")
+    if (NOT reconfig_list)
+      set(reconfig_list "${CAPP_PACKAGES}")
+    endif()
+    foreach (package IN LISTS reconfig_list)
+      file(REMOVE_RECURSE "${CAPP_BUILD_ROOT}/${package}")
+    endforeach()
+    capp_fulfill_needs(
+      RESULT_VARIABLE capp_command_result
+    )
   elseif(CAPP_COMMAND STREQUAL "commit")
     capp_commit_command(
       PACKAGE ${CAPP_COMMAND_ARGUMENTS}
