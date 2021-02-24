@@ -87,6 +87,8 @@ vim package_function.c
 capp rebuild package1
 ```
 
+If given no arguments, the `capp rebuild` command will rebuild all packages.
+
 ### Reconfiguring a Package
 
 Sometimes a change to a package is substantial enough that it requires
@@ -94,6 +96,7 @@ CMake reconfiguration in order to properly update the build.
 This can be done with the `capp reconfig` command, which works just
 like `capp rebuild` but will force a fresh CMake configuration of
 the package prior to rebuilding.
+If given no arguments, the `capp reconfig` command will reconfigure and rebuild all packages.
 
 ### Accepting a New Package Version
 
