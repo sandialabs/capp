@@ -112,7 +112,7 @@ capp commit package1
 git commit -a -m "updated version of package1"
 ```
 
-### Checking our New Package Versions
+### Checking Out New Package Versions
 
 An inverse of the prior function is to update the package source in the source directory
 to be exactly the version pointed to by the application repository.
