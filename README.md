@@ -27,7 +27,9 @@ elsewhere it will install `capp`.
 
 The first step to using CApp is to create a repository that describes the packages needed
 for the application.
-This can be done by using the `capp init` command:
+This can be done by using the `capp init` command.
+As the name suggests, an application repository is also a Git repository, and `capp init`
+will call `git init`.
 
 ```bash
 mkdir my-application
