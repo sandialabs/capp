@@ -48,6 +48,7 @@ git commit -a -m "initial application commit"
 The easiest way to add a new package to the application repository is via `capp clone`:
 
 ```bash
+cd my-application
 capp clone git@github.com:Unidata/netcdf-c.git
 vim package/netcdf-c/package.cmake 
 git commit -a -m "added netcdf package"
@@ -102,4 +103,19 @@ cd source/package1
 git pull
 capp commit package1
 git commit -a -m "updated version of package1"
+```
+
+### Checking our New Package Versions
+
+An inverse of the prior function is to update the package source in the source directory
+to be exactly the version pointed to by the application repository.
+We do this with the `capp checkout` command.
+This is especially helpful to run after other developers have made changes to package
+versions.
+
+```bash
+cd my-application
+git pull
+capp checkout
+capp build
 ```
