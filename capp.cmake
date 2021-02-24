@@ -616,13 +616,13 @@ else()
   capp_find_root()
   capp_read_package_files()
   capp_topsort_packages()
-  capp_initialize_needs()
   if (CAPP_COMMAND STREQUAL "clone")
     capp_clone_command(
       GIT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
       RESULT_VARIABLE capp_command_result
     )
   elseif(CAPP_COMMAND STREQUAL "build")
+    capp_initialize_needs()
     capp_fulfill_needs(
       RESULT_VARIABLE capp_command_result
     )
@@ -634,6 +634,7 @@ else()
     foreach (package IN LISTS rebuild_list)
       file(REMOVE_RECURSE "${CAPP_INSTALL_ROOT}/${package}")
     endforeach()
+    capp_initialize_needs()
     capp_fulfill_needs(
       RESULT_VARIABLE capp_command_result
     )
@@ -645,6 +646,7 @@ else()
     foreach (package IN LISTS reconfig_list)
       file(REMOVE_RECURSE "${CAPP_BUILD_ROOT}/${package}")
     endforeach()
+    capp_initialize_needs()
     capp_fulfill_needs(
       RESULT_VARIABLE capp_command_result
     )
