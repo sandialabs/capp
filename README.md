@@ -12,6 +12,10 @@ to build the application, their exact version expressed as a Git commit,
 their dependencies, and the CMake arguments needed to configure each package.
 By knowing only about exactly one version of each package, CApp avoids any responsibilities
 related to version compatibility resolution.
+What CApp does do is automate the process of cloning, configuring, building, installing,
+and otherwise developing the various packages needed to build an application.
+It can be used for automated installation, continuous integration, and local
+developer work, all in a unified system that is portable across operating systems.
 
 # Usage
 
