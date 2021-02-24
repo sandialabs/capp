@@ -273,7 +273,9 @@ function(capp_initialize_needs)
     endif()
   endforeach()
   foreach(package IN LISTS CAPP_PACKAGES)
-    if (${package}_IS_CLONED AND EXISTS "${CAPP_BUILD_ROOT}/${package}/capp_configured.txt")
+    if (${package}_IS_CLONED AND
+        "${CAPP_BUILD_ROOT}/${package}/capp_configured.txt" IS_NEWER_THAN "${CAPP_ROOT}/app.cmake" AND
+        "${CAPP_BUILD_ROOT}/${package}/capp_configured.txt" IS_NEWER_THAN "${CAPP_PACKAGE_ROOT}/${package}/package.cmake")
       set(${package}_IS_CONFIGURED TRUE)
     else()
       set(${package}_IS_CONFIGURED FALSE)
@@ -284,7 +286,10 @@ function(capp_initialize_needs)
     capp_dependencies_installed(
       PACKAGE ${package}
       OUTPUT_VARIABLE dependencies_installed)
-    if (${package}_IS_CONFIGURED AND dependencies_installed AND EXISTS "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
+    if (${package}_IS_CONFIGURED AND
+        dependencies_installed AND
+        "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt" IS_NEWER_THAN "${CAPP_ROOT}/app.cmake" AND
+        "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt" IS_NEWER_THAN "${CAPP_PACKAGE_ROOT}/${package}/package.cmake")
       set(${package}_IS_INSTALLED TRUE)
     else()
       set(${package}_IS_INSTALLED FALSE)
