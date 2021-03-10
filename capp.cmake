@@ -23,25 +23,35 @@ function(capp_execute)
   string(REPLACE ";" " " capp_execute_printable "${capp_execute_COMMAND}")
   message("executing ${capp_execute_printable}")
   message("in ${capp_execute_WORKING_DIRECTORY}")
+  if (capp_execute_OUTPUT_VARIABLE)
+    set(output_args OUTPUT_VARIABLE capp_execute_output)
+  else()
+    set(output_args)
+  endif()
+  if (capp_execute_ERROR_VARIABLE)
+    set(error_args ERROR_VARIABLE capp_execute_error)
+  else()
+    set(error_args)
+  endif()
   execute_process(
       COMMAND ${capp_execute_COMMAND}
       WORKING_DIRECTORY "${capp_execute_WORKING_DIRECTORY}"
       RESULT_VARIABLE capp_execute_result
-      OUTPUT_VARIABLE capp_execute_output
-      ERROR_VARIABLE capp_execute_error
+      ${output_args}
+      ${error_args}
   )
-  message("${capp_execute_output}")
-  message("${capp_execute_error}")
-  if (NOT capp_execute_result EQUAL 0)
-    message("command ${capp_execute_printable} failed: ${capp_execute_result}")
-  endif()
-  set(${capp_execute_RESULT_VARIABLE} "${capp_execute_result}" PARENT_SCOPE)
   if (capp_execute_OUTPUT_VARIABLE)
+    message("${capp_execute_output}")
     set(${capp_execute_OUTPUT_VARIABLE} "${capp_execute_output}" PARENT_SCOPE)
   endif()
   if (capp_execute_ERROR_VARIABLE)
+    message("${capp_execute_error}")
     set(${capp_execute_ERROR_VARIABLE} "${capp_execute_error}" PARENT_SCOPE)
   endif()
+  if (NOT capp_execute_result EQUAL 0)
+    message("command ${capp_execute_printable} in ${capp_execute_WORKING_DIRECTORY} failed: ${capp_execute_result}")
+  endif()
+  set(${capp_execute_RESULT_VARIABLE} "${capp_execute_result}" PARENT_SCOPE)
 endfunction()
 
 function(capp_add_file)
