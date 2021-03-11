@@ -527,7 +527,7 @@ function(capp_commit_command)
   endif()
   file(READ "${CAPP_PACKAGE_ROOT}/${capp_commit_command_PACKAGE}/package.cmake" old_package_contents)
   string(REGEX REPLACE "COMMIT [a-z0-9]+" "COMMIT ${new_commit}" commit_package_contents "${old_package_contents}")
-  string(REGEX REPLACE "GIT_URL [a-zA-Z0-9:@/\\.-]+" "GIT_URL ${new_git_url}" new_package_contents "${commit_package_contents}")
+  string(REGEX REPLACE "GIT_URL [_a-zA-Z0-9:@/\\.-]+" "GIT_URL ${new_git_url}" new_package_contents "${commit_package_contents}")
   file(WRITE "${CAPP_PACKAGE_ROOT}/${capp_commit_command_PACKAGE}/package.cmake" "${new_package_contents}")
   set(${capp_commit_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
   capp_add_file(
