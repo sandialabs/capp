@@ -35,6 +35,8 @@ elsewhere it will install `capp`.
 
 ## Setting Up an Application
 
+### init command
+
 The first step to using CApp is to create a repository that describes the packages needed
 for the application.
 This can be done by using the `capp init` command.
@@ -49,6 +51,30 @@ vim app.cmake
 git commit -a -m "initial application commit"
 ```
 
+### app.cmake
+
+An application's `app.cmake` file should at minimum contain a call to `capp_app` command,
+whose signature is as follows:
+```
+capp_app(
+  NAME app_name
+  ROOT_PACKAGES package1 [package2 ... ])
+```
+
+Where `NAME` should be the name of your overall application.
+`ROOT_PACKAGES` should be the list of packages that CApp
+must always try to compile.
+CApp will try to build all packages that `ROOT_PACKAGES`
+depend on (see the documentation on `capp_package`)
+in the right order.
+Most applications will have an "application package", which is a package
+that contains the source code for the application but not any of the
+other supporting packages.
+The typical use case will be to list the `ROOT_PACKAGES` as
+just the application package.
+
+### clone command
+
 The easiest way to add a new package to the application repository is via `capp clone`:
 
 ```bash
@@ -57,6 +83,69 @@ capp clone git@github.com:Unidata/netcdf-c.git
 vim package/netcdf-c/package.cmake 
 git commit -a -m "added netcdf package"
 ```
+
+### package.cmake
+
+The primary package information in a CApp application repository
+is stored in files:
+
+```
+package/<package_name>/package.cmake
+```
+
+The actual names of packages are the names of the sub-directories
+in the `package` directory of the application repository.
+
+A package's `package.cmake` file should at minimum call `capp_package`,
+whose signature is as follows:
+
+```
+capp_package(
+  GIT_URL git_url
+  COMMIT commit
+  [OPTIONS option1 [option2 ...]]
+  [DEPENDENCIES dep1 [dep2 ...]]
+  [NO_CONFIGURE_CACHE]
+```
+
+Here, `GIT_URL` option should be a Git URL suitable for `git clone`
+and other commands.
+An example Git URL would be `git@github.com:SNLComputation/omega_h.git`.
+While CApp doesn't impose restrictions on the type of Git URL,
+it has only been tested with SSH protocol URLs and not
+with HTTPS protocol URLs.
+
+The `COMMIT` option should be the SHA-1 hash for a certain Git
+commit, meaning the version of the package repository we
+want to checkout and build.
+
+Note that by directly listing a SHA-1 commit has in `package.cmake`
+files, CApp implements a submodule-like system that ensures
+that the SHA-1 commit hashes of the application repository
+are tied to the SHA-1 commit hashes of the package repositories.
+This means that it is enough to know the version of the
+application repository that was built in order to know
+the exact versions of all package repositories that were built.
+
+The `OPTIONS` list should be a list of command line arguments
+to CMake when configuring the package.
+For example, an item `option1` might be `-DFOO_ENABLE_FAST=ON`.
+Note that CApp already defines 
+`CMAKE_BUILD_TYPE` and `CMAKE_INSTALL_PREFIX` when
+configuring a package.
+
+The `DEPENDENCIES` list should be a list of package names
+on which the current package directly depends.
+Recall that package names are the names of subdirectories
+of the `package` directory of the application repository.
+
+If the `NO_CONFIGURE_CACHE` option is present, then when
+CApp tries to re-configure a package it will first
+remove the `CMakeCache.txt` file.
+This is useful when packages have buggy CMake files
+that produce different results when incrementally reconfigured
+than they do when configured without a cache,
+even with the same arguments supplied.
 
 ## Installing an Application
 
