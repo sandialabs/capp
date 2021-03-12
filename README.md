@@ -105,7 +105,7 @@ capp_package(
   COMMIT commit
   [OPTIONS option1 [option2 ...]]
   [DEPENDENCIES dep1 [dep2 ...]]
-  [NO_CONFIGURE_CACHE]
+  [NO_CONFIGURE_CACHE])
 ```
 
 The `GIT_URL` option should be a Git URL suitable for `git clone`
@@ -119,7 +119,7 @@ The `COMMIT` option should be the SHA-1 hash for a certain Git
 commit, meaning the version of the package repository we
 want to checkout and build.
 
-Note that by directly listing a SHA-1 commit has in `package.cmake`
+Note that by directly listing a SHA-1 commit in `package.cmake`
 files, CApp implements a submodule-like system that ensures
 that the SHA-1 commit hashes of the application repository
 are tied to the SHA-1 commit hashes of the package repositories.
