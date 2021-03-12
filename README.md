@@ -108,7 +108,7 @@ capp_package(
   [NO_CONFIGURE_CACHE]
 ```
 
-Here, `GIT_URL` option should be a Git URL suitable for `git clone`
+The `GIT_URL` option should be a Git URL suitable for `git clone`
 and other commands.
 An example Git URL would be `git@github.com:SNLComputation/omega_h.git`.
 While CApp doesn't impose restrictions on the type of Git URL,
