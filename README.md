@@ -53,7 +53,7 @@ git commit -a -m "initial application commit"
 
 ### app.cmake
 
-An application's `app.cmake` file should at minimum contain a call to `capp_app` command,
+An application's `app.cmake` file should at minimum contain a call to the `capp_app` command,
 whose signature is as follows:
 ```
 capp_app(
