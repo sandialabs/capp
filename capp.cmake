@@ -667,7 +667,6 @@ else()
       RESULT_VARIABLE capp_command_result
     )
   elseif(CAPP_COMMAND STREQUAL "commit")
-    message("CAPP_COMMAND_ARGUMENTS=${CAPP_COMMAND_ARGUMENTS}")
     set(commit_list "${CAPP_COMMAND_ARGUMENTS}")
     if (NOT commit_list)
       set(commit_list "${CAPP_PACKAGES}")
