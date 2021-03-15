@@ -164,7 +164,6 @@ function(capp_package)
   set(${CAPP_PACKAGE}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_DEPENDENCIES "${capp_package_DEPENDENCIES}" PARENT_SCOPE)
-  message("capp_package for ${CAPP_PACKAGE}, NO_CONFIGURE_CACHE=${capp_package_NO_CONFIGURE_CACHE}")
   set(${CAPP_PACKAGE}_NO_CONFIGURE_CACHE "${capp_package_NO_CONFIGURE_CACHE}" PARENT_SCOPE)
 endfunction()
 
