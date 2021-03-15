@@ -53,8 +53,13 @@ git commit -a -m "initial application commit"
 
 ### app.cmake
 
+An application repository needs to have an `app.cmake` file in the top-level directory.
+Similar to how Git identifies a Git repository by the presence of a `.git` directory,
+CApp identifies an application repository by the presence of an `app.cmake` file.
+`capp init` creates this file with some default content for convenience.
 An application's `app.cmake` file should at minimum contain a call to the `capp_app` command,
 whose signature is as follows:
+
 ```
 capp_app(
   NAME app_name
@@ -149,12 +154,36 @@ even with the same arguments supplied.
 
 ## Installing an Application
 
+### build command
+
 With a copy of the application repository available, CApp can build it with the `capp build` command.
 
 ```bash
 cd my-application
 capp build
 ```
+
+### Directory structure
+
+CApp will create sub-directories in the application repository directory called
+`source`, `build`, and `install`.
+Each package will have its Git repository cloned into:
+```
+source/<package-name>
+```
+Each package will have its CMake binary directory (where CMake is configured
+and all intermediate build files are stored) at:
+```
+build/<package-name>
+```
+Each package will be installed by setting `CMAKE_INSTALL_PREFIX` equal to:
+```
+install/<package-name>
+```
+
+The `capp init` command populates `.gitignore` to ignore these directories,
+since their content is an artifact of the current build and not part of the
+fundamental specification of an application repository.
 
 ## Developing an Application
 
