@@ -26,7 +26,7 @@ CApp itself is fairly easy to install using CMake:
 ```bash
 git clone git@cee-gitlab.sandia.gov:1443-public/code/capp.git
 cd capp
-cmake .
+cmake . -DCMAKE_INSTALL_PREFIX=/where/to/install/CApp
 cmake --install .
 ```
 
