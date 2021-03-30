@@ -123,7 +123,7 @@ function(capp_configure)
 endfunction()
 
 function(capp_build)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_build "" "PACKAGE;RESULT_VARIABLE" "")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_build "" "PACKAGE;RESULT_VARIABLE" "ARGUMENTS")
   capp_execute(
       COMMAND
       "${CMAKE_COMMAND}"
@@ -131,6 +131,7 @@ function(capp_build)
       "."
       "--config"
       ${CAPP_BUILD_TYPE}
+      ${capp_build_ARGUMENTS}
       WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_build_PACKAGE}"
       RESULT_VARIABLE cmake_build_result
   )
@@ -208,9 +209,11 @@ function(capp_topsort_packages)
 endfunction()
 
 function(capp_build_install)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_build_install "" "PACKAGE;RESULT_VARIABLE" "")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_build_install "" "PACKAGE;RESULT_VARIABLE" "BUILD_ARGUMENTS")
   capp_build(
     PACKAGE ${capp_build_install_PACKAGE}
+    ARGUMENTS
+    ${capp_build_install_BUILD_ARGUMENTS}
     RESULT_VARIABLE capp_build_result
   )
   if (NOT capp_build_result EQUAL 0)
@@ -339,7 +342,7 @@ function(capp_dependencies_installed)
 endfunction()
 
 function(capp_fulfill_needs)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_fulfill_needs "" "RESULT_VARIABLE" "")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_fulfill_needs "" "RESULT_VARIABLE" "BUILD_ARGUMENTS")
   foreach(package IN LISTS CAPP_PACKAGES)
     if (NOT ${package}_IS_CLONED)
       capp_clone(
@@ -367,6 +370,8 @@ function(capp_fulfill_needs)
       capp_build_install(
         PACKAGE ${package}
         RESULT_VARIABLE capp_build_install_result
+        BUILD_ARGUMENTS
+        ${capp_fulfill_needs_BUILD_ARGUMENTS}
       )
       if (NOT capp_build_install_result EQUAL 0)
         set(${capp_fulfill_needs_RESULT_VARIABLE} "${capp_build_install_result}" PARENT_SCOPE)
@@ -621,6 +626,29 @@ function(capp_checkout_command)
   set(${capp_checkout_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
+function(capp_separate_args)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_separate_args "" "PACKAGES_VARIABLE;BUILD_ARGUMENTS_VARIABLE" "INPUT_ARGUMENTS")
+  set(build_args)
+  set(packages)
+  while (capp_separate_args_INPUT_ARGUMENTS)
+    list(POP_FRONT capp_separate_args_INPUT_ARGUMENTS arg)
+    list(FIND CAPP_PACKAGES "${arg}" package_index)
+    if (arg STREQUAL "--parallel" OR arg STREQUAL "-j")
+      list(POP_FRONT capp_separate_args_INPUT_ARGUMENTS n)
+      list(APPEND build_args "${arg}" "${n}")
+    elseif (arg STREQUAL "--verbose" OR arg STREQUAL "-v")
+      list(APPEND build_args "${arg}")
+    elseif (NOT package_index EQUAL -1)
+      list(APPEND packages "${arg}")
+    endif()
+  endwhile()
+  if (NOT packages)
+    set(packages "${CAPP_PACKAGES}")
+  endif()
+  set(${capp_separate_args_PACKAGES_VARIABLE} "${packages}" PARENT_SCOPE)
+  set(${capp_separate_args_BUILD_ARGUMENTS_VARIABLE} "${build_args}" PARENT_SCOPE)
+endfunction()
+
 math(EXPR ARGC_MINUS_ONE "${CMAKE_ARGC} - 1")
 if (CMAKE_ARGC LESS 4)
   message(FATAL_ERROR "No command specified!")
@@ -655,28 +683,34 @@ else()
       RESULT_VARIABLE capp_command_result
     )
   elseif(CAPP_COMMAND STREQUAL "rebuild")
-    set(rebuild_list "${CAPP_COMMAND_ARGUMENTS}")
-    if (NOT rebuild_list)
-      set(rebuild_list "${CAPP_PACKAGES}")
-    endif()
-    foreach (package IN LISTS rebuild_list)
+    capp_separate_args(
+      INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+      PACKAGES_VARIABLE build_list
+      BUILD_ARGUMENTS_VARIABLE build_args)
+    message("got packages ${build_list}")
+    message("got build args ${build_args}")
+    foreach (package IN LISTS build_list)
       file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
     endforeach()
     capp_initialize_needs()
     capp_fulfill_needs(
       RESULT_VARIABLE capp_command_result
+      BUILD_ARGUMENTS
+      ${build_args}
     )
   elseif(CAPP_COMMAND STREQUAL "reconfig")
-    set(reconfig_list "${CAPP_COMMAND_ARGUMENTS}")
-    if (NOT reconfig_list)
-      set(reconfig_list "${CAPP_PACKAGES}")
-    endif()
-    foreach (package IN LISTS reconfig_list)
+    capp_separate_args(
+      INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+      PACKAGES_VARIABLE config_list
+      BUILD_ARGUMENTS_VARIABLE build_args)
+    foreach (package IN LISTS config_list)
       capp_delete_configuration(${package})
     endforeach()
     capp_initialize_needs()
     capp_fulfill_needs(
       RESULT_VARIABLE capp_command_result
+      BUILD_ARGUMENTS
+      ${build_args}
     )
   elseif(CAPP_COMMAND STREQUAL "commit")
     set(commit_list "${CAPP_COMMAND_ARGUMENTS}")
