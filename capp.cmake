@@ -687,8 +687,6 @@ else()
       INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
       PACKAGES_VARIABLE build_list
       BUILD_ARGUMENTS_VARIABLE build_args)
-    message("got packages ${build_list}")
-    message("got build args ${build_args}")
     foreach (package IN LISTS build_list)
       file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
     endforeach()
