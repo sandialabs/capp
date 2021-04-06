@@ -678,9 +678,14 @@ else()
       RESULT_VARIABLE capp_command_result
     )
   elseif(CAPP_COMMAND STREQUAL "build")
+    capp_separate_args(
+      INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+      PACKAGES_VARIABLE package_list
+      BUILD_ARGUMENTS_VARIABLE build_args)
     capp_initialize_needs()
     capp_fulfill_needs(
       RESULT_VARIABLE capp_command_result
+      BUILD_ARGUMENTS ${build_args}
     )
   elseif(CAPP_COMMAND STREQUAL "rebuild")
     capp_separate_args(
