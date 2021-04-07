@@ -1,4 +1,3 @@
-set(CAPP_BUILD_TYPE Release)
 set(CAPP_TRUE TRUE)
 
 if (WIN32)
@@ -154,9 +153,14 @@ function(capp_install)
 endfunction()
 
 function(capp_app)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_app "" "NAME" "ROOT_PACKAGES")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_app "" "NAME;BUILD_TYPE" "ROOT_PACKAGES")
   set(CAPP_APP_NAME ${capp_app_NAME} PARENT_SCOPE)
   set(CAPP_ROOT_PACKAGES "${capp_app_ROOT_PACKAGES}" PARENT_SCOPE)
+  set(build_type "${capp_app_BUILD_TYPE}")
+  if (NOT build_type)
+    set(build_type RelWithDebInfo)
+  endif()
+  set(CAPP_BUILD_TYPE "${build_type}" PARENT_SCOPE)
 endfunction()
 
 function(capp_package)
