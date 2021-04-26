@@ -577,11 +577,9 @@ function(capp_checkout_command)
         return()
       endif()
       if (NOT current_git_url STREQUAL ${package}_GIT_URL)
-        message("${package} needs reclone because ${current_git_url}=${${package}_GIT_URL}")
         set(needs_reclone TRUE)
       endif()
     else()
-      message("${package} needs reclone because ${CAPP_SOURCE_ROOT}/${package} doesn't exist")
       set(needs_reclone TRUE)
     endif()
     if (needs_reclone)
@@ -606,25 +604,36 @@ function(capp_checkout_command)
       return()
     endif()
     if (NOT current_commit STREQUAL ${package}_COMMIT)
-      capp_execute(
-        COMMAND "${GIT_EXECUTABLE}" fetch origin
-        WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-        RESULT_VARIABLE fetch_result
-        )
-      if (NOT fetch_result EQUAL 0)
-        set(${capp_checkout_command_RESULT_VARIABLE} "${fetch_result}" PARENT_SCOPE)
-        return()
-      endif()
-      capp_execute(
-        COMMAND "${GIT_EXECUTABLE}" checkout ${${package}_COMMIT}
-        WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-        RESULT_VARIABLE checkout_result
-        )
-      if (NOT checkout_result EQUAL 0)
-        set(${capp_checkout_command_RESULT_VARIABLE} "${checkout_result}" PARENT_SCOPE)
-        return()
-      endif()
       file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
+      capp_execute(
+        COMMAND "${GIT_EXECUTABLE}" pull
+        WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+        RESULT_VARIABLE pull_result
+        )
+      if (NOT pull_result EQUAL 0)
+        set(${capp_checkout_command_RESULT_VARIABLE} "${pull_result}" PARENT_SCOPE)
+        return()
+      endif()
+      capp_get_commit(
+        PACKAGE ${package}
+        COMMIT_VARIABLE current_commit
+        RESULT_VARIABLE get_commit_result
+        )
+      if (NOT get_commit_result EQUAL 0)
+        set(${capp_checkout_command_RESULT_VARIABLE} "${get_commit_result}" PARENT_SCOPE)
+        return()
+      endif()
+      if (NOT current_commit STREQUAL ${package}_COMMIT)
+        capp_execute(
+          COMMAND "${GIT_EXECUTABLE}" checkout ${${package}_COMMIT}
+          WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+          RESULT_VARIABLE checkout_result
+          )
+        if (NOT checkout_result EQUAL 0)
+          set(${capp_checkout_command_RESULT_VARIABLE} "${checkout_result}" PARENT_SCOPE)
+          return()
+        endif()
+      endif()
     endif()
   endforeach()
   set(${capp_checkout_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
