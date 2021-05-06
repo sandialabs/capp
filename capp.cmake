@@ -77,7 +77,7 @@ function(capp_clone)
   cmake_parse_arguments(PARSE_ARGV 0 capp_clone "" "PACKAGE;RESULT_VARIABLE" "")
   make_directory("${CAPP_SOURCE_ROOT}")
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" clone -n ${${capp_clone_PACKAGE}_GIT_URL} ${capp_clone_PACKAGE}
+    COMMAND "${GIT_EXECUTABLE}" clone ${${capp_clone_PACKAGE}_GIT_URL} ${capp_clone_PACKAGE}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
     RESULT_VARIABLE git_clone_result
     )
@@ -85,15 +85,28 @@ function(capp_clone)
     set(${capp_clone_RESULT_VARIABLE} "${git_clone_result}" PARENT_SCOPE)
     return()
   endif()
-  capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" checkout ${${capp_clone_PACKAGE}_COMMIT}
-    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_clone_PACKAGE}"
-    RESULT_VARIABLE git_checkout_result
+  capp_get_commit(
+    PACKAGE ${package}
+    COMMIT_VARIABLE current_commit
+    RESULT_VARIABLE get_commit_result
     )
-  set(${capp_clone_RESULT_VARIABLE} "${git_checkout_result}" PARENT_SCOPE)
-  if (git_checkout_result EQUAL 0)
-    set(${capp_clone_PACKAGE}_IS_CLONED TRUE PARENT_SCOPE)
+  if (NOT get_commit_result EQUAL 0)
+    set(${capp_clone_RESULT_VARIABLE} "${get_commit_result}" PARENT_SCOPE)
+    return()
   endif()
+  if (NOT current_commit STREQUAL ${capp_clone_PACKAGE}_COMMIT)
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" checkout ${${capp_clone_PACKAGE}_COMMIT}
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_clone_PACKAGE}"
+      RESULT_VARIABLE git_checkout_result
+      )
+    if (NOT git_checkout_result EQUAL 0)
+      set(${capp_clone_RESULT_VARIABLE} "${git_checkout_result}" PARENT_SCOPE)
+      return()
+    endif()
+  endif()
+  set(${capp_clone_RESULT_VARIABLE} 0 PARENT_SCOPE)
+  set(${capp_clone_PACKAGE}_IS_CLONED TRUE PARENT_SCOPE)
 endfunction()
 
 function(capp_configure)
