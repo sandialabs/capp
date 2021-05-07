@@ -24,7 +24,7 @@ developer work, all in a unified system that is portable across operating system
 CApp itself is fairly easy to install using CMake:
 
 ```bash
-git clone git@cee-gitlab.sandia.gov:1443-public/code/capp.git
+git clone git@github.com:SNLComputation/capp.git
 cd capp
 cmake . -DCMAKE_INSTALL_PREFIX=/where/to/install/CApp
 cmake --install .
