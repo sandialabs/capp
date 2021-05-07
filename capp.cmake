@@ -652,6 +652,21 @@ function(capp_checkout_command)
   set(${capp_checkout_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
+function(capp_pull_command)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_pull_command "" "RESULT_VARIABLE" "")
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" pull
+    WORKING_DIRECTORY "${CAPP_ROOT}"
+    RESULT_VARIABLE pull_result
+    )
+  if (NOT pull_result EQUAL 0)
+    set(${capp_pull_command_RESULT_VARIABLE} "${pull_result}" PARENT_SCOPE)
+    return()
+  endif()
+  capp_checkout_command(RESULT_VARIABLE capp_checkout_result)
+  set(${capp_pull_command_RESULT_VARIABLE} "${capp_checkout_result}" PARENT_SCOPE)
+endfunction()
+
 function(capp_separate_args)
   cmake_parse_arguments(PARSE_ARGV 0 capp_separate_args "" "PACKAGES_VARIABLE;BUILD_ARGUMENTS_VARIABLE" "INPUT_ARGUMENTS")
   set(build_args)
@@ -757,6 +772,10 @@ else()
     endforeach()
   elseif(CAPP_COMMAND STREQUAL "checkout")
     capp_checkout_command(
+      RESULT_VARIABLE capp_command_result
+    )
+  elseif(CAPP_COMMAND STREQUAL "pull")
+    capp_pull_command(
       RESULT_VARIABLE capp_command_result
     )
   else()
