@@ -578,6 +578,7 @@ endfunction()
 function(capp_checkout_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_checkout_command "" "RESULT_VARIABLE" "")
   foreach(package IN LISTS CAPP_PACKAGES)
+    message("checkout ${package}")
     set(needs_reclone FALSE)
     if (EXISTS "${CAPP_SOURCE_ROOT}/${package}")
       capp_get_git_url(
@@ -595,6 +596,7 @@ function(capp_checkout_command)
     else()
       set(needs_reclone TRUE)
     endif()
+    message("needs_reclone=${needs_reclone}")
     if (needs_reclone)
       file(REMOVE_RECURSE "${CAPP_SOURCE_ROOT}/${package}")
       capp_clone(
@@ -616,17 +618,25 @@ function(capp_checkout_command)
       set(${capp_checkout_command_RESULT_VARIABLE} "${get_commit_result}" PARENT_SCOPE)
       return()
     endif()
+    message("current_commit=${current_commit}, ${package}_COMMIT=${${package}_COMMIT}")
     if (NOT current_commit STREQUAL ${package}_COMMIT)
       file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
+      #instead of executing "git pull", we execute "git fetch" and "git merge FETCH_HEAD"
+      #separately because if "git merge FETCH_HEAD" fails "git checkout" might still
+      #be able to checkout the correct commit
       capp_execute(
-        COMMAND "${GIT_EXECUTABLE}" pull
+        COMMAND "${GIT_EXECUTABLE}" fetch
         WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-        RESULT_VARIABLE pull_result
+        RESULT_VARIABLE fetch_result
         )
-      if (NOT pull_result EQUAL 0)
-        set(${capp_checkout_command_RESULT_VARIABLE} "${pull_result}" PARENT_SCOPE)
+      if (NOT fetch_result EQUAL 0)
+        set(${capp_checkout_command_RESULT_VARIABLE} "${fetch_result}" PARENT_SCOPE)
         return()
       endif()
+      capp_execute(
+        COMMAND "${GIT_EXECUTABLE}" merge FETCH_HEAD
+        WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+        )
       capp_get_commit(
         PACKAGE ${package}
         COMMIT_VARIABLE current_commit
