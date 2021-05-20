@@ -177,12 +177,13 @@ function(capp_app)
 endfunction()
 
 function(capp_package)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_package "NO_CONFIGURE_CACHE" "GIT_URL;COMMIT" "OPTIONS;DEPENDENCIES")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_package "NO_CONFIGURE_CACHE;IGNORE_UNCOMMITTED" "GIT_URL;COMMIT" "OPTIONS;DEPENDENCIES")
   set(${CAPP_PACKAGE}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_DEPENDENCIES "${capp_package_DEPENDENCIES}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_NO_CONFIGURE_CACHE "${capp_package_NO_CONFIGURE_CACHE}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_IGNORE_UNCOMMITTED "${capp_package_IGNORE_UNCOMMITTED}" PARENT_SCOPE)
 endfunction()
 
 function(capp_topsort_packages)
@@ -254,6 +255,7 @@ function(capp_read_package_file)
   set(capp_read_package_file_path "${CAPP_PACKAGE_ROOT}/${CAPP_PACKAGE}/package.cmake")
   include("${capp_read_package_file_path}")
   set(${CAPP_PACKAGE}_NO_CONFIGURE_CACHE ${${CAPP_PACKAGE}_NO_CONFIGURE_CACHE} PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_IGNORE_UNCOMMITTED ${${CAPP_PACKAGE}_IGNORE_UNCOMMITTED} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_GIT_URL ${${CAPP_PACKAGE}_GIT_URL} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_COMMIT ${${CAPP_PACKAGE}_COMMIT} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_OPTIONS "${${CAPP_PACKAGE}_OPTIONS}" PARENT_SCOPE)
@@ -539,6 +541,17 @@ endfunction()
 
 function(capp_commit_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_commit_command "" "PACKAGE;RESULT_VARIABLE" "")
+  if (NOT ${capp_commit_command_PACKAGE}_IGNORE_UNCOMMITTED)
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" status --porcelain=v1
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
+      OUTPUT_VARIABLE status_result)
+    if (status_result)
+      message("${capp_commit_command_PACKAGE} has uncommitted changes:\n${status_result}")
+      set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
+      return()
+    endif()
+  endif()
   capp_get_git_url(
     PACKAGE ${capp_commit_command_PACKAGE}
     GIT_URL_VARIABLE new_git_url
