@@ -244,3 +244,11 @@ git pull
 capp checkout
 capp build
 ```
+
+Even easier, the `capp pull` command is equivalent to `git pull` followed by `capp checkout`:
+
+```bash
+cd my-application
+capp pull
+capp build
+```
