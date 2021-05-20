@@ -231,7 +231,8 @@ If given no arguments, the `capp reconfig` command will reconfigure and rebuild 
 
 ### Accepting a New Package Version
 
-One key function is updating which version of a package the application repository points to,
+After a developer is done modifying a package, the natural next step is getting the
+application repository to accept and point to the new modified version of the package.
 This is done by the `capp commit` command, which will update the git URL and git commit that
 the application repository points to.
 
