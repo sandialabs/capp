@@ -60,10 +60,11 @@ CApp identifies an application repository by the presence of an `app.cmake` file
 An application's `app.cmake` file should at minimum contain a call to the `capp_app` command,
 whose signature is as follows:
 
-```
+```cmake
 capp_app(
   NAME app_name
-  ROOT_PACKAGES package1 [package2 ... ])
+  ROOT_PACKAGES package1 [package2 ... ]
+  [BUILD_TYPE <type>])
 ```
 
 Where `NAME` should be the name of your overall application.
@@ -77,6 +78,9 @@ that contains the source code for the application but not any of the
 other supporting packages.
 The typical use case will be to list the `ROOT_PACKAGES` as
 just the application package.
+By default, CApp will configure all packages with `-DCMAKE_BUILD_TYPE=RelWithDebInfo`.
+The `BUILD_TYPE` argument can be used to change the build type to something else
+(CMake supports `Release`, `Debug`, and `None`).
 
 ### clone command
 
