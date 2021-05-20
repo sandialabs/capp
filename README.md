@@ -108,13 +108,14 @@ in the `package` directory of the application repository.
 A package's `package.cmake` file should at minimum call `capp_package`,
 whose signature is as follows:
 
-```
+```cmake
 capp_package(
   GIT_URL git_url
   COMMIT commit
   [OPTIONS option1 [option2 ...]]
   [DEPENDENCIES dep1 [dep2 ...]]
-  [NO_CONFIGURE_CACHE])
+  [NO_CONFIGURE_CACHE]
+  [IGNORE_UNCOMMITTED])
 ```
 
 The `GIT_URL` option should be a Git URL suitable for `git clone`
@@ -155,6 +156,14 @@ This is useful when packages have buggy CMake files
 that produce different results when incrementally reconfigured
 than they do when configured without a cache,
 even with the same arguments supplied.
+
+The `capp commit` command discussed later will check whether there
+are uncommitted changes to a package's source repository.
+However, some packages modify their source directory during their
+configure, build, and install process even though this is bad practice.
+For those packages, one can add `IGNORE_UNCOMMITTED` to the
+`capp_package` arguments to tell CApp to ignore uncommitted changes
+to that package.
 
 ## Installing an Application
 
@@ -233,6 +242,13 @@ git pull
 capp commit package1
 git commit -a -m "updated version of package1"
 ```
+
+`capp commit` will fail if there are uncommitted changes to the package's source
+repository, thereby helping to ensure that the current state of the source code
+really gets captured.
+This behavior can be avoided by specifying `IGNORE_UNCOMMITTED` in `package.cmake` files.
+
+If given no package arguments, `capp commit` will operate on all packages.
 
 ### Checking Out New Package Versions
 
