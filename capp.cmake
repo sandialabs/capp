@@ -545,9 +545,26 @@ function(capp_commit_command)
     capp_execute(
       COMMAND "${GIT_EXECUTABLE}" status --porcelain=v1
       WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
-      OUTPUT_VARIABLE status_result)
-    if (status_result)
-      message("${capp_commit_command_PACKAGE} has uncommitted changes:\n${status_result}")
+      RESULT_VARIABLE uncommitted_result
+      OUTPUT_VARIABLE uncommitted_output)
+    if (NOT uncommitted_result EQUAL 0)
+      set(${capp_commit_command_RESULT_VARIABLE} ${uncommitted_result} PARENT_SCOPE)
+      return()
+    endif()
+    if (uncommitted_output)
+      message("${capp_commit_command_PACKAGE} has uncommitted changes:\n${uncommitted_output}")
+      set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
+      return()
+    endif()
+  endif()
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" log @{push}..
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
+    RESULT_VARIABLE unpushed_result
+    OUTPUT_VARIABLE unpushed_output)
+  if (unpushed_result EQUAL 0)
+    if (unpushed_output)
+      message("${capp_commit_command_PACKAGE} has unpushed commits:\n${unpushed_output}")
       set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
       return()
     endif()
