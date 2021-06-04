@@ -117,10 +117,14 @@ function(capp_configure)
   else()
     set(build_type_option "-DCMAKE_BUILD_TYPE=${CAPP_BUILD_TYPE}")
   endif()
+  set(source_directory "${CAPP_SOURCE_ROOT}/${capp_configure_PACKAGE}")
+  if (${capp_configure_PACKAGE}_SUBDIRECTORY)
+    set(source_directory "${source_directory}/${${capp_configure_PACKAGE}_SUBDIRECTORY}")
+  endif()
   capp_execute(
       COMMAND
       "${CMAKE_COMMAND}"
-      "${CAPP_SOURCE_ROOT}/${capp_configure_PACKAGE}"
+      "${source_directory}"
       "-DCMAKE_INSTALL_PREFIX=${CAPP_INSTALL_ROOT}/${capp_configure_PACKAGE}"
       ${build_type_option}
       ${${capp_configure_PACKAGE}_OPTIONS}
@@ -177,13 +181,14 @@ function(capp_app)
 endfunction()
 
 function(capp_package)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_package "NO_CONFIGURE_CACHE;IGNORE_UNCOMMITTED" "GIT_URL;COMMIT" "OPTIONS;DEPENDENCIES")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_package "NO_CONFIGURE_CACHE;IGNORE_UNCOMMITTED" "GIT_URL;COMMIT;SUBDIRECTORY" "OPTIONS;DEPENDENCIES")
   set(${CAPP_PACKAGE}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_DEPENDENCIES "${capp_package_DEPENDENCIES}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_NO_CONFIGURE_CACHE "${capp_package_NO_CONFIGURE_CACHE}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_IGNORE_UNCOMMITTED "${capp_package_IGNORE_UNCOMMITTED}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_SUBDIRECTORY "${capp_package_SUBDIRECTORY}" PARENT_SCOPE)
 endfunction()
 
 function(capp_topsort_packages)
@@ -260,6 +265,7 @@ function(capp_read_package_file)
   set(${CAPP_PACKAGE}_COMMIT ${${CAPP_PACKAGE}_COMMIT} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_OPTIONS "${${CAPP_PACKAGE}_OPTIONS}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_DEPENDENCIES "${${CAPP_PACKAGE}_DEPENDENCIES}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_SUBDIRECTORY "${${CAPP_PACKAGE}_SUBDIRECTORY}" PARENT_SCOPE)
   set(CAPP_PACKAGES ${CAPP_PACKAGES} ${CAPP_PACKAGE} PARENT_SCOPE)
 endfunction()
 
