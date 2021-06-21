@@ -549,7 +549,7 @@ function(capp_commit_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_commit_command "" "PACKAGE;RESULT_VARIABLE" "")
   if (NOT ${capp_commit_command_PACKAGE}_IGNORE_UNCOMMITTED)
     capp_execute(
-      COMMAND "${GIT_EXECUTABLE}" status --porcelain=v1
+      COMMAND "${GIT_EXECUTABLE}" status --porcelain
       WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
       RESULT_VARIABLE uncommitted_result
       OUTPUT_VARIABLE uncommitted_output)
