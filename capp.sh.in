@@ -1,2 +1,0 @@
-#!/bin/sh
-"@NATIVE_CMAKE_COMMAND@" -P "@NATIVE_INSTALL_PREFIX@/bin/capp.cmake" "$@"

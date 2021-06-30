@@ -21,13 +21,15 @@ developer work, all in a unified system that is portable across operating system
 
 ## Installing
 
-CApp itself is fairly easy to install using CMake:
+CApp consists of a CMake script and two drivers: a Bash driver for Linux or Mac and
+a Batch driver for Windows.
+The drivers can be used from the cloned Git repository or the three files can be
+copied somewhere else (`capp.cmake` needs to be in the same directory as the driver).
 
 ```bash
 git clone git@github.com:SNLComputation/capp.git
 cd capp
-cmake . -DCMAKE_INSTALL_PREFIX=/where/to/install/CApp
-cmake --install .
+cp capp.cmake capp.sh capp.bat /where/you/want
 ```
 
 On Windows, this will install `capp.bat` to the `bin` directory and
@@ -46,7 +48,7 @@ will call `git init`.
 ```bash
 mkdir my-application
 cd my-application
-capp init my-application
+capp.sh init my-application
 vim app.cmake
 git commit -a -m "initial application commit"
 ```
@@ -88,7 +90,7 @@ The easiest way to add a new package to the application repository is via `capp 
 
 ```bash
 cd my-application
-capp clone git@github.com:Unidata/netcdf-c.git
+capp.sh clone git@github.com:Unidata/netcdf-c.git
 vim package/netcdf-c/package.cmake 
 git commit -a -m "added netcdf package"
 ```
@@ -173,7 +175,7 @@ With a copy of the application repository available, CApp can build it with the 
 
 ```bash
 cd my-application
-capp build
+capp.sh build
 ```
 
 ### Directory structure
@@ -215,7 +217,7 @@ This can be done with the `capp rebuild` command:
 cd my-application
 cd source/package1
 vim package_function.c
-capp rebuild package1
+capp.sh rebuild package1
 ```
 
 If given no arguments, the `capp rebuild` command will rebuild all packages.
@@ -240,7 +242,7 @@ the application repository points to.
 cd my-application
 cd source/package1
 git pull
-capp commit package1
+capp.sh commit package1
 git commit -a -m "updated version of package1"
 ```
 
@@ -262,14 +264,14 @@ versions.
 ```bash
 cd my-application
 git pull
-capp checkout
-capp build
+capp.sh checkout
+capp.sh build
 ```
 
 Even easier, the `capp pull` command is equivalent to `git pull` followed by `capp checkout`:
 
 ```bash
 cd my-application
-capp pull
-capp build
+capp.sh pull
+capp.sh build
 ```
