@@ -511,7 +511,6 @@ function(capp_clone_command)
   string(LENGTH "${git_directory_quoted}" git_directory_quoted_length)
   math(EXPR git_directory_length "${git_directory_quoted_length} - 2")
   string(SUBSTRING "${git_directory_quoted}" 1 ${git_directory_length} git_directory)
-  string(REPLACE "-" "_" name_guess "${git_directory}")
   set(CAPP_PACKAGE_NAME ${name_guess})
   set(${CAPP_PACKAGE_NAME}_DIRECTORY "${git_directory}")
   capp_get_git_url(
