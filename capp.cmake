@@ -1,3 +1,7 @@
+if (CMAKE_VERSION VERSION_LESS 3.15)
+  message(FATAL_ERROR "CApp requires at least CMake 3.15")
+endif()
+
 set(CAPP_TRUE TRUE)
 
 if (WIN32)
