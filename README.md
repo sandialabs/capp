@@ -231,6 +231,18 @@ like `capp rebuild` but will force a fresh CMake configuration of
 the package prior to rebuilding.
 If given no arguments, the `capp reconfig` command will reconfigure and rebuild all packages.
 
+### Testing a Package
+
+Since CApp assumes all packages use CMake to compile, it also assumes that CTest is used for testing.
+The command `capp test` is used to test packages.
+Like other commands, it accepts one or more package names as arguments, and if not given any arguments
+then all packages are tested.
+CApp will simply call `ctest` in the appropriate package build directory in order to test a package.
+
+```bash
+capp.sh test package1
+```
+
 ### Accepting a New Package Version
 
 After a developer is done modifying a package, the natural next step is getting the

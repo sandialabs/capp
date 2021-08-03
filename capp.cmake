@@ -805,6 +805,21 @@ else()
       BUILD_ARGUMENTS
       ${build_args}
     )
+  elseif(CAPP_COMMAND STREQUAL "test")
+    capp_separate_args(
+      INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+      PACKAGES_VARIABLE test_list)
+    set(capp_command_result 0)
+    foreach (package IN LISTS test_list)
+      capp_execute(
+        WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${package}"
+        RESULT_VARIABLE package_test_result
+        COMMAND ctest)
+      if (NOT package_test_result EQUAL 0)
+        set(capp_command_result "${package_test_result}")
+        break()
+      endif()
+    endforeach()
   elseif(CAPP_COMMAND STREQUAL "commit")
     set(commit_list "${CAPP_COMMAND_ARGUMENTS}")
     if (NOT commit_list)
