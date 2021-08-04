@@ -119,7 +119,7 @@ function(capp_configure)
   if (WIN32)
     set(build_type_option)
   else()
-    set(build_type_option "-DCMAKE_BUILD_TYPE=${CAPP_BUILD_TYPE}")
+    set(build_type_option "-DCMAKE_BUILD_TYPE=${${capp_configure_PACKAGE}_BUILD_TYPE}")
   endif()
   set(source_directory "${CAPP_SOURCE_ROOT}/${capp_configure_PACKAGE}")
   if (${capp_configure_PACKAGE}_SUBDIRECTORY)
@@ -150,7 +150,7 @@ function(capp_build)
       "--build"
       "."
       "--config"
-      ${CAPP_BUILD_TYPE}
+      ${${capp_build_PACKAGE}_BUILD_TYPE}
       ${capp_build_ARGUMENTS}
       WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_build_PACKAGE}"
       RESULT_VARIABLE cmake_build_result
@@ -166,7 +166,7 @@ function(capp_install)
       "--install"
       "."
       "--config"
-      ${CAPP_BUILD_TYPE}
+      ${${capp_install_PACKAGE}_BUILD_TYPE}
       WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_install_PACKAGE}"
       RESULT_VARIABLE cmake_install_result
   )
@@ -185,7 +185,7 @@ function(capp_app)
 endfunction()
 
 function(capp_package)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_package "NO_CONFIGURE_CACHE;IGNORE_UNCOMMITTED" "GIT_URL;COMMIT;SUBDIRECTORY" "OPTIONS;DEPENDENCIES")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_package "NO_CONFIGURE_CACHE;IGNORE_UNCOMMITTED" "GIT_URL;COMMIT;SUBDIRECTORY;BUILD_TYPE" "OPTIONS;DEPENDENCIES")
   set(${CAPP_PACKAGE}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
@@ -193,6 +193,11 @@ function(capp_package)
   set(${CAPP_PACKAGE}_NO_CONFIGURE_CACHE "${capp_package_NO_CONFIGURE_CACHE}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_IGNORE_UNCOMMITTED "${capp_package_IGNORE_UNCOMMITTED}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_SUBDIRECTORY "${capp_package_SUBDIRECTORY}" PARENT_SCOPE)
+  if (capp_package_BUILD_TYPE)
+    set(${CAPP_PACKAGE}_BUILD_TYPE "${capp_package_BUILD_TYPE}" PARENT_SCOPE)
+  else()
+    set(${CAPP_PACKAGE}_BUILD_TYPE "${CAPP_BUILD_TYPE}" PARENT_SCOPE)
+  endif()
 endfunction()
 
 function(capp_topsort_packages)
@@ -270,6 +275,7 @@ function(capp_read_package_file)
   set(${CAPP_PACKAGE}_OPTIONS "${${CAPP_PACKAGE}_OPTIONS}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_DEPENDENCIES "${${CAPP_PACKAGE}_DEPENDENCIES}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_SUBDIRECTORY "${${CAPP_PACKAGE}_SUBDIRECTORY}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_BUILD_TYPE "${${CAPP_PACKAGE}_BUILD_TYPE}" PARENT_SCOPE)
   set(CAPP_PACKAGES ${CAPP_PACKAGES} ${CAPP_PACKAGE} PARENT_SCOPE)
 endfunction()
 
