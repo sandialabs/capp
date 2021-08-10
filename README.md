@@ -6,7 +6,7 @@ CApp is like a package manager, but it avoids a lot of package manager responsib
 by building packages just to support one application, hence the name is a shortening of "C Application".
 CApp depends only on CMake and Git, and is actually written in the CMake language for portability.
 It assumes all packages have source code stored in Git repositories and are compiled with CMake.
-CApp is built around the notion of an application repository, which is a Git repository
+CApp is built around the notion of an build repository, which is a Git repository
 containing "package files": CMake language files which describe packages needed
 to build the application, their exact version expressed as a Git commit,
 their dependencies, and the CMake arguments needed to configure each package.
@@ -42,12 +42,12 @@ elsewhere it will install `capp`.
 The first step to using CApp is to create a repository that describes the packages needed
 for the application.
 This can be done by using the `capp init` command.
-As the name suggests, an application repository is also a Git repository, and `capp init`
+As the name suggests, a build repository is also a Git repository, and `capp init`
 will call `git init`.
 
 ```bash
-mkdir my-application
-cd my-application
+mkdir my-build
+cd my-build
 capp.sh init my-application
 vim app.cmake
 git commit -a -m "initial application commit"
@@ -55,9 +55,9 @@ git commit -a -m "initial application commit"
 
 ### app.cmake
 
-An application repository needs to have an `app.cmake` file in the top-level directory.
+A build repository needs to have an `app.cmake` file in the top-level directory.
 Similar to how Git identifies a Git repository by the presence of a `.git` directory,
-CApp identifies an application repository by the presence of an `app.cmake` file.
+CApp identifies a build repository by the presence of an `app.cmake` file.
 `capp init` creates this file with some default content for convenience.
 An application's `app.cmake` file should at minimum contain a call to the `capp_app` command,
 whose signature is as follows:
@@ -86,10 +86,10 @@ The `BUILD_TYPE` argument can be used to change the build type to something else
 
 ### clone command
 
-The easiest way to add a new package to the application repository is via `capp clone`:
+The easiest way to add a new package to the build repository is via `capp clone`:
 
 ```bash
-cd my-application
+cd my-build
 capp.sh clone git@github.com:Unidata/netcdf-c.git
 vim package/netcdf-c/package.cmake 
 git commit -a -m "added netcdf package"
@@ -97,7 +97,7 @@ git commit -a -m "added netcdf package"
 
 ### package.cmake
 
-The primary package information in a CApp application repository
+The primary package information in a CApp build repository
 is stored in files:
 
 ```
@@ -105,7 +105,7 @@ package/<package_name>/package.cmake
 ```
 
 The actual names of packages are the names of the sub-directories
-in the `package` directory of the application repository.
+in the `package` directory of the build repository.
 
 A package's `package.cmake` file should at minimum call `capp_package`,
 whose signature is as follows:
@@ -133,10 +133,10 @@ want to checkout and build.
 
 Note that by directly listing a SHA-1 commit in `package.cmake`
 files, CApp implements a submodule-like system that ensures
-that the SHA-1 commit hashes of the application repository
+that the SHA-1 commit hashes of the build repository
 are tied to the SHA-1 commit hashes of the package repositories.
 This means that it is enough to know the version of the
-application repository that was built in order to know
+build repository that was built in order to know
 the exact versions of all package repositories that were built.
 
 The `OPTIONS` list should be a list of command line arguments
@@ -149,7 +149,7 @@ configuring a package.
 The `DEPENDENCIES` list should be a list of package names
 on which the current package directly depends.
 Recall that package names are the names of subdirectories
-of the `package` directory of the application repository.
+of the `package` directory of the build repository.
 
 If the `NO_CONFIGURE_CACHE` option is present, then when
 CApp tries to re-configure a package it will first
@@ -171,16 +171,16 @@ to that package.
 
 ### build command
 
-With a copy of the application repository available, CApp can build it with the `capp build` command.
+With a copy of the build repository available, CApp can build it with the `capp build` command.
 
 ```bash
-cd my-application
+cd my-build
 capp.sh build
 ```
 
 ### Directory structure
 
-CApp will create sub-directories in the application repository directory called
+CApp will create sub-directories in the build repository directory called
 `source`, `build`, and `install`.
 Each package will have its Git repository cloned into:
 ```
@@ -198,7 +198,7 @@ install/<package-name>
 
 The `capp init` command populates `.gitignore` to ignore these directories,
 since their content is an artifact of the current build and not part of the
-fundamental specification of an application repository.
+fundamental specification of a build repository.
 
 ## Developing an Application
 
@@ -207,14 +207,14 @@ Another key use case of CApp is actual application development.
 ### Rebuilding a Package
 
 Users of CApp are encouraged to edit package source code in the
-the `source/` subdirectory of the application repository and follow
+the `source/` subdirectory of the build repository and follow
 the normal Git workflow for each package as desired.
 At some point, to see the effects of the source code changes,
 users may want to rebuild a package and all downstream dependencies.
 This can be done with the `capp rebuild` command:
 
 ```bash
-cd my-application
+cd my-build
 cd source/package1
 vim package_function.c
 capp.sh rebuild package1
@@ -246,12 +246,12 @@ capp.sh test package1
 ### Accepting a New Package Version
 
 After a developer is done modifying a package, the natural next step is getting the
-application repository to accept and point to the new modified version of the package.
+build repository to accept and point to the new modified version of the package.
 This is done by the `capp commit` command, which will update the git URL and git commit that
-the application repository points to.
+the build repository points to.
 
 ```bash
-cd my-application
+cd my-build
 cd source/package1
 git pull
 capp.sh commit package1
@@ -268,13 +268,13 @@ If given no package arguments, `capp commit` will operate on all packages.
 ### Checking Out New Package Versions
 
 An inverse of the prior function is to update the package source in the source directory
-to be exactly the version pointed to by the application repository.
+to be exactly the version pointed to by the build repository.
 We do this with the `capp checkout` command.
 This is especially helpful to run after other developers have made changes to package
 versions.
 
 ```bash
-cd my-application
+cd my-build
 git pull
 capp.sh checkout
 capp.sh build
@@ -283,7 +283,7 @@ capp.sh build
 Even easier, the `capp pull` command is equivalent to `git pull` followed by `capp checkout`:
 
 ```bash
-cd my-application
+cd my-build
 capp.sh pull
 capp.sh build
 ```
