@@ -496,11 +496,18 @@ function(capp_init_command)
     set(${capp_init_command_RESULT_VARIABLE} ${capp_add_file_result} PARENT_SCOPE)
     return()
   endif()
-  capp_commit(
-    MESSAGE "Creating app ${capp_init_command_NAME}"
-    RESULT_VARIABLE capp_commit_result
-  )
-  set(${capp_init_command_RESULT_VARIABLE} ${capp_commit_result} PARENT_SCOPE)
+  foreach(filename "capp.cmake" "capp.sh" "capp.bat")
+    file(COPY "${CMAKE_CURRENT_LIST_DIR}/${filename}" DESTINATION "${CAPP_ROOT}")
+    capp_add_file(
+      FILE "${CAPP_ROOT}/${filename}"
+      RESULT_VARIABLE capp_add_file_result
+    )
+    if (NOT capp_add_file_result EQUAL 0)
+      set(${capp_init_command_RESULT_VARIABLE} ${capp_add_file_result} PARENT_SCOPE)
+      return()
+    endif()
+  endforeach()
+  set(${capp_init_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
 function(capp_clone_command)
