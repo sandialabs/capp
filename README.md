@@ -32,8 +32,8 @@ cd capp
 cp capp.cmake capp.sh capp.bat /where/you/want
 ```
 
-On Windows, this will install `capp.bat` to the `bin` directory and
-elsewhere it will install `capp`.
+Most users will not need to do this because `capp init` will copy these files into
+the build repository, see the next section for more details.
 
 ## Setting Up an Application
 
