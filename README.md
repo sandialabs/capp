@@ -288,4 +288,6 @@ capp.sh pull
 capp.sh build
 ```
 
+Slides describing CApp and modern CMake usage can be found [here](https://figshare.com/articles/presentation/Better_Package_Management/16556511)
+
 At Sandia, CApp is SCR# 2639.0
