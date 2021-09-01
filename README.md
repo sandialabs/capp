@@ -17,6 +17,8 @@ and otherwise developing the various packages needed to build an application.
 It can be used for automated installation, continuous integration, and local
 developer work, all in a unified system that is portable across operating systems.
 
+Slides describing CApp and modern CMake usage can be found [here](https://figshare.com/articles/presentation/Better_Package_Management/16556511)
+
 # Usage
 
 ## Installing
@@ -287,7 +289,5 @@ cd my-build
 capp.sh pull
 capp.sh build
 ```
-
-Slides describing CApp and modern CMake usage can be found [here](https://figshare.com/articles/presentation/Better_Package_Management/16556511)
 
 At Sandia, CApp is SCR# 2639.0
