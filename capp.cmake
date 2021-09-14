@@ -1,6 +1,4 @@
-if (CMAKE_VERSION VERSION_LESS 3.15)
-  message(FATAL_ERROR "CApp requires at least CMake 3.15")
-endif()
+cmake_minimum_required(VERSION 3.15...3.21.1)
 
 set(CAPP_TRUE TRUE)
 
