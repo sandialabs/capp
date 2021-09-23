@@ -623,8 +623,8 @@ function(capp_commit_command)
 endfunction()
 
 function(capp_checkout_command)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_checkout_command "" "RESULT_VARIABLE" "")
-  foreach(package IN LISTS CAPP_PACKAGES)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_checkout_command "" "RESULT_VARIABLE" "PACKAGES")
+  foreach(package IN LISTS capp_checkout_command_PACKAGES)
     set(needs_reclone FALSE)
     if (EXISTS "${CAPP_SOURCE_ROOT}/${package}")
       capp_get_git_url(
@@ -719,7 +719,7 @@ function(capp_pull_command)
   endif()
   capp_read_package_files()
   capp_topsort_packages()
-  capp_checkout_command(RESULT_VARIABLE capp_checkout_result)
+  capp_checkout_command(RESULT_VARIABLE capp_checkout_result PACKAGES ${CAPP_PACKAGES})
   set(${capp_pull_command_RESULT_VARIABLE} "${capp_checkout_result}" PARENT_SCOPE)
 endfunction()
 
@@ -801,88 +801,106 @@ if (CAPP_COMMAND STREQUAL "init")
     NAME ${CAPP_COMMAND_ARGUMENTS}
     RESULT_VARIABLE capp_command_result
   )
-else()
+elseif (CAPP_COMMAND STREQUAL "clone")
+  capp_find_root()
+  capp_clone_command(
+    GIT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+    RESULT_VARIABLE capp_command_result
+  )
+elseif(CAPP_COMMAND STREQUAL "build")
   capp_find_root()
   capp_read_package_files()
   capp_topsort_packages()
-  if (CAPP_COMMAND STREQUAL "clone")
-    capp_clone_command(
-      GIT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
-      RESULT_VARIABLE capp_command_result
-    )
-  elseif(CAPP_COMMAND STREQUAL "build")
-    capp_separate_args(
-      INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
-      PACKAGES_VARIABLE package_list
-      BUILD_ARGUMENTS_VARIABLE build_args)
-    capp_initialize_needs()
-    capp_fulfill_needs(
-      RESULT_VARIABLE capp_command_result
-      BUILD_ARGUMENTS ${build_args}
-    )
-  elseif(CAPP_COMMAND STREQUAL "rebuild")
-    capp_separate_args(
-      INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
-      PACKAGES_VARIABLE build_list
-      BUILD_ARGUMENTS_VARIABLE build_args)
-    foreach (package IN LISTS build_list)
-      file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
-    endforeach()
-    capp_initialize_needs()
-    capp_fulfill_needs(
-      RESULT_VARIABLE capp_command_result
-      BUILD_ARGUMENTS
-      ${build_args}
-    )
-  elseif(CAPP_COMMAND STREQUAL "reconfig")
-    capp_separate_args(
-      INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
-      PACKAGES_VARIABLE config_list
-      BUILD_ARGUMENTS_VARIABLE build_args)
-    foreach (package IN LISTS config_list)
-      capp_delete_configuration(${package})
-    endforeach()
-    capp_initialize_needs()
-    capp_fulfill_needs(
-      RESULT_VARIABLE capp_command_result
-      BUILD_ARGUMENTS
-      ${build_args}
-    )
-  elseif(CAPP_COMMAND STREQUAL "test")
-    capp_separate_args(
-      INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
-      TEST_ARGUMENTS_VARIABLE test_args
-      PACKAGES_VARIABLE test_list)
-    capp_test_command(
-      ARGUMENTS ${test_args}
-      PACKAGES ${test_list}
-      RESULT_VARIABLE capp_command_result)
-  elseif(CAPP_COMMAND STREQUAL "commit")
-    set(commit_list "${CAPP_COMMAND_ARGUMENTS}")
-    if (NOT commit_list)
-      set(commit_list "${CAPP_PACKAGES}")
-    endif()
-    foreach (package IN LISTS commit_list)
-      capp_commit_command(
-        PACKAGE ${package}
-        RESULT_VARIABLE capp_command_result
-      )
-      if (NOT capp_command_result EQUAL 0)
-        break()
-      endif()
-    endforeach()
-  elseif(CAPP_COMMAND STREQUAL "checkout")
-    capp_checkout_command(
-      RESULT_VARIABLE capp_command_result
-    )
-  elseif(CAPP_COMMAND STREQUAL "pull")
-    capp_pull_command(
-      RESULT_VARIABLE capp_command_result
-    )
-  else()
-    message("packages:${CAPP_PACKAGES}")
-    message(FATAL_ERROR "Unknown command ${CAPP_COMMAND}!")
+  capp_separate_args(
+    INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+    PACKAGES_VARIABLE package_list
+    BUILD_ARGUMENTS_VARIABLE build_args)
+  capp_initialize_needs()
+  capp_fulfill_needs(
+    RESULT_VARIABLE capp_command_result
+    BUILD_ARGUMENTS ${build_args}
+  )
+elseif(CAPP_COMMAND STREQUAL "rebuild")
+  capp_find_root()
+  capp_read_package_files()
+  capp_topsort_packages()
+  capp_separate_args(
+    INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+    PACKAGES_VARIABLE build_list
+    BUILD_ARGUMENTS_VARIABLE build_args)
+  foreach (package IN LISTS build_list)
+    file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
+  endforeach()
+  capp_initialize_needs()
+  capp_fulfill_needs(
+    RESULT_VARIABLE capp_command_result
+    BUILD_ARGUMENTS
+    ${build_args}
+  )
+elseif(CAPP_COMMAND STREQUAL "reconfig")
+  capp_find_root()
+  capp_read_package_files()
+  capp_topsort_packages()
+  capp_separate_args(
+    INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+    PACKAGES_VARIABLE config_list
+    BUILD_ARGUMENTS_VARIABLE build_args)
+  foreach (package IN LISTS config_list)
+    capp_delete_configuration(${package})
+  endforeach()
+  capp_initialize_needs()
+  capp_fulfill_needs(
+    RESULT_VARIABLE capp_command_result
+    BUILD_ARGUMENTS
+    ${build_args}
+  )
+elseif(CAPP_COMMAND STREQUAL "test")
+  capp_find_root()
+  capp_read_package_files()
+  capp_topsort_packages()
+  capp_separate_args(
+    INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+    TEST_ARGUMENTS_VARIABLE test_args
+    PACKAGES_VARIABLE test_list)
+  capp_test_command(
+    ARGUMENTS ${test_args}
+    PACKAGES ${test_list}
+    RESULT_VARIABLE capp_command_result)
+elseif(CAPP_COMMAND STREQUAL "commit")
+  capp_find_root()
+  capp_read_package_files()
+  capp_topsort_packages()
+  set(commit_list "${CAPP_COMMAND_ARGUMENTS}")
+  if (NOT commit_list)
+    set(commit_list "${CAPP_PACKAGES}")
   endif()
+  foreach (package IN LISTS commit_list)
+    capp_commit_command(
+      PACKAGE ${package}
+      RESULT_VARIABLE capp_command_result
+    )
+    if (NOT capp_command_result EQUAL 0)
+      break()
+    endif()
+  endforeach()
+elseif(CAPP_COMMAND STREQUAL "checkout")
+  capp_find_root()
+  capp_read_package_files()
+  capp_topsort_packages()
+  capp_separate_args(
+    INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+    PACKAGES_VARIABLE checkout_list)
+  capp_checkout_command(
+    RESULT_VARIABLE capp_command_result
+    PACKAGES ${checkout_list}
+  )
+elseif(CAPP_COMMAND STREQUAL "pull")
+  capp_find_root()
+  capp_pull_command(
+    RESULT_VARIABLE capp_command_result
+  )
+else()
+  message(FATAL_ERROR "Unknown command ${CAPP_COMMAND}!")
 endif()
 
 if (NOT capp_command_result EQUAL 0)
