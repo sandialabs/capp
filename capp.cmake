@@ -29,13 +29,16 @@ function(capp_subdirectories)
 endfunction()
 
 function(capp_execute)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_execute "ERROR_QUIET" "WORKING_DIRECTORY;RESULT_VARIABLE;OUTPUT_VARIABLE;ERROR_VARIABLE" "COMMAND")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_execute "OUTPUT_QUIET;ERROR_QUIET" "WORKING_DIRECTORY;RESULT_VARIABLE;OUTPUT_VARIABLE;ERROR_VARIABLE" "COMMAND")
   set(extra_args)
   if (capp_execute_OUTPUT_VARIABLE)
     list(APPEND extra_args OUTPUT_VARIABLE capp_execute_output)
   endif()
   if (capp_execute_ERROR_VARIABLE)
     list(APPEND extra_args ERROR_VARIABLE capp_execute_error)
+  endif()
+  if (capp_execute_OUTPUT_QUIET)
+    list(APPEND extra_args OUTPUT_QUIET)
   endif()
   if (capp_execute_ERROR_QUIET)
     list(APPEND extra_args ERROR_QUIET)
@@ -78,12 +81,16 @@ endfunction()
 function(capp_clone)
   cmake_parse_arguments(PARSE_ARGV 0 capp_clone "" "PACKAGE;RESULT_VARIABLE" "")
   make_directory("${CAPP_SOURCE_ROOT}")
+  message("\nCApp is cloning ${capp_clone_PACKAGE} from ${${capp_clone_PACKAGE}_GIT_URL}\n")
   capp_execute(
     COMMAND "${GIT_EXECUTABLE}" clone ${${capp_clone_PACKAGE}_GIT_URL} ${capp_clone_PACKAGE}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
     RESULT_VARIABLE git_clone_result
+    OUTPUT_QUIET
+    ERROR_QUIET
     )
   if (NOT git_clone_result EQUAL 0)
+    message("\nCApp clone of ${capp_clone_PACKAGE} from ${${capp_clone_PACKAGE}_GIT_URL} failed\n")
     set(${capp_clone_RESULT_VARIABLE} "${git_clone_result}" PARENT_SCOPE)
     return()
   endif()
