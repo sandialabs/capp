@@ -118,6 +118,7 @@ capp_package(
   COMMIT commit
   [OPTIONS option1 [option2 ...]]
   [DEPENDENCIES dep1 [dep2 ...]]
+  [BUILD_TYPE type]
   [NO_CONFIGURE_CACHE]
   [IGNORE_UNCOMMITTED])
 ```
@@ -152,6 +153,11 @@ The `DEPENDENCIES` list should be a list of package names
 on which the current package directly depends.
 Recall that package names are the names of subdirectories
 of the `package` directory of the build repository.
+
+If the `BUILD_TYPE` option is present, it sets the value of
+`CMAKE_BUILD_TYPE` for just this package.
+Otherwise, the value of `BUILD_TYPE` given to `capp_app` is used.
+If neither are given, `RelWithDebInfo` is used.
 
 If the `NO_CONFIGURE_CACHE` option is present, then when
 CApp tries to re-configure a package it will first
