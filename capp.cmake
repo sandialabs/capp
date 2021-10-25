@@ -7,6 +7,15 @@ if (WIN32)
 endif()
 find_package(Git REQUIRED QUIET)
 
+function(capp_list_to_string)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_list_to_string "" "LIST;STRING" "")
+  set(str)
+  foreach(item IN LISTS "${capp_list_to_string_LIST}")
+    set(str "${str} ${item}")
+  endforeach()
+  set(${capp_list_to_string_STRING} "${str}" PARENT_SCOPE)
+endfunction()
+
 function(capp_subdirectories)
   cmake_parse_arguments(PARSE_ARGV 0 capp_subdirectories "" "PARENT_DIRECTORY;RESULT_VARIABLE" "")
   file(GLOB children RELATIVE "${capp_subdirectories_PARENT_DIRECTORY}" "${capp_subdirectories_PARENT_DIRECTORY}/*")
@@ -20,35 +29,28 @@ function(capp_subdirectories)
 endfunction()
 
 function(capp_execute)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_execute "" "WORKING_DIRECTORY;RESULT_VARIABLE;OUTPUT_VARIABLE;ERROR_VARIABLE" "COMMAND")
-  string(REPLACE ";" " " capp_execute_printable "${capp_execute_COMMAND}")
-  message("\nexecuting ${capp_execute_printable}")
-  message("in ${capp_execute_WORKING_DIRECTORY}")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_execute "ERROR_QUIET" "WORKING_DIRECTORY;RESULT_VARIABLE;OUTPUT_VARIABLE;ERROR_VARIABLE" "COMMAND")
+  set(extra_args)
   if (capp_execute_OUTPUT_VARIABLE)
-    set(output_args OUTPUT_VARIABLE capp_execute_output)
-  else()
-    set(output_args)
+    list(APPEND extra_args OUTPUT_VARIABLE capp_execute_output)
   endif()
   if (capp_execute_ERROR_VARIABLE)
-    set(error_args ERROR_VARIABLE capp_execute_error)
-  else()
-    set(error_args)
+    list(APPEND extra_args ERROR_VARIABLE capp_execute_error)
+  endif()
+  if (capp_execute_ERROR_QUIET)
+    list(APPEND extra_args ERROR_QUIET)
   endif()
   execute_process(
       COMMAND ${capp_execute_COMMAND}
       WORKING_DIRECTORY "${capp_execute_WORKING_DIRECTORY}"
       RESULT_VARIABLE capp_execute_result
-      ${output_args}
-      ${error_args}
+      ${extra_args}
   )
   if (capp_execute_OUTPUT_VARIABLE)
     set(${capp_execute_OUTPUT_VARIABLE} "${capp_execute_output}" PARENT_SCOPE)
   endif()
   if (capp_execute_ERROR_VARIABLE)
     set(${capp_execute_ERROR_VARIABLE} "${capp_execute_error}" PARENT_SCOPE)
-  endif()
-  if (NOT capp_execute_result EQUAL 0)
-    message("command ${capp_execute_printable} in ${capp_execute_WORKING_DIRECTORY} failed: ${capp_execute_result}")
   endif()
   set(${capp_execute_RESULT_VARIABLE} "${capp_execute_result}" PARENT_SCOPE)
 endfunction()
@@ -112,22 +114,22 @@ endfunction()
 function(capp_configure)
   cmake_parse_arguments(PARSE_ARGV 0 capp_configure "" "PACKAGE;RESULT_VARIABLE" "")
   make_directory("${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}")
-  if (WIN32)
-    set(build_type_option)
-  else()
-    set(build_type_option "-DCMAKE_BUILD_TYPE=${${capp_configure_PACKAGE}_BUILD_TYPE}")
+  set(options "-DCMAKE_INSTALL_PREFIX=${CAPP_INSTALL_ROOT}/${capp_configure_PACKAGE}")
+  if (NOT WIN32)
+    list(APPEND options "-DCMAKE_BUILD_TYPE=${${capp_configure_PACKAGE}_BUILD_TYPE}")
   endif()
+  list(APPEND options ${${capp_configure_PACKAGE}_OPTIONS})
   set(source_directory "${CAPP_SOURCE_ROOT}/${capp_configure_PACKAGE}")
   if (${capp_configure_PACKAGE}_SUBDIRECTORY)
     set(source_directory "${source_directory}/${${capp_configure_PACKAGE}_SUBDIRECTORY}")
   endif()
+  capp_list_to_string(LIST options STRING print_options)
+  message("\nCApp configuring ${capp_configure_PACKAGE} with these options: ${print_options}\n")
   capp_execute(
       COMMAND
       "${CMAKE_COMMAND}"
       "${source_directory}"
-      "-DCMAKE_INSTALL_PREFIX=${CAPP_INSTALL_ROOT}/${capp_configure_PACKAGE}"
-      ${build_type_option}
-      ${${capp_configure_PACKAGE}_OPTIONS}
+      ${options}
       WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}"
       RESULT_VARIABLE cmake_configure_result
   )
@@ -140,6 +142,12 @@ endfunction()
 
 function(capp_build)
   cmake_parse_arguments(PARSE_ARGV 0 capp_build "" "PACKAGE;RESULT_VARIABLE" "ARGUMENTS")
+  set(with_args "")
+  if (capp_build_ARGUMENTS)
+    capp_list_to_string(LIST capp_build_ARGUMENTS STRING print_args)
+    set(with_args " with extra arguments${print_args}")
+  endif()
+  message("\nCApp building ${capp_build_PACKAGE}${with_args}\n")
   capp_execute(
       COMMAND
       "${CMAKE_COMMAND}"
@@ -156,6 +164,7 @@ endfunction()
 
 function(capp_install)
   cmake_parse_arguments(PARSE_ARGV 0 capp_install "" "PACKAGE;RESULT_VARIABLE" "")
+  message("\nCApp installing ${capp_install_PACKAGE}\n")
   capp_execute(
       COMMAND
       "${CMAKE_COMMAND}"
@@ -575,6 +584,7 @@ function(capp_commit_command)
     COMMAND "${GIT_EXECUTABLE}" log @{push}..
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
     RESULT_VARIABLE unpushed_result
+    ERROR_QUIET
     OUTPUT_VARIABLE unpushed_output)
   if (unpushed_result EQUAL 0)
     if (unpushed_output)
