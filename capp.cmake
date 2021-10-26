@@ -104,10 +104,13 @@ function(capp_clone)
     return()
   endif()
   if (NOT current_commit STREQUAL ${capp_clone_PACKAGE}_COMMIT)
+    message("\nCApp is checking out desired commit ${${capp_clone_PACKAGE}_COMMIT} for ${capp_clone_PACKAGE}\n")
     capp_execute(
       COMMAND "${GIT_EXECUTABLE}" checkout ${${capp_clone_PACKAGE}_COMMIT}
       WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_clone_PACKAGE}"
       RESULT_VARIABLE git_checkout_result
+      OUTPUT_QUIET
+      ERROR_QUIET
       )
     if (NOT git_checkout_result EQUAL 0)
       set(${capp_clone_RESULT_VARIABLE} "${git_checkout_result}" PARENT_SCOPE)
@@ -652,9 +655,11 @@ function(capp_checkout_command)
         return()
       endif()
       if (NOT current_git_url STREQUAL ${package}_GIT_URL)
+        message("\nCApp needs to reclone ${package} since its current Git URL doesn't match what is in the package file\n")
         set(needs_reclone TRUE)
       endif()
     else()
+      message("\nCApp needs to clone ${package} since it isn't cloned yet\n")
       set(needs_reclone TRUE)
     endif()
     if (needs_reclone)
@@ -679,14 +684,18 @@ function(capp_checkout_command)
       return()
     endif()
     if (NOT current_commit STREQUAL ${package}_COMMIT)
+      message("\nCApp noticed ${package} isn't at the desired commit\n")
       file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
       #instead of executing "git pull", we execute "git fetch" and "git merge FETCH_HEAD"
       #separately because if "git merge FETCH_HEAD" fails "git checkout" might still
       #be able to checkout the correct commit
+      message("\nCApp is fetching ${package} in case the desired commit doesn't exist locally\n")
       capp_execute(
         COMMAND "${GIT_EXECUTABLE}" fetch
         WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
         RESULT_VARIABLE fetch_result
+        OUTPUT_QUIET
+        ERROR_QUIET
         )
       if (NOT fetch_result EQUAL 0)
         set(${capp_checkout_command_RESULT_VARIABLE} "${fetch_result}" PARENT_SCOPE)
@@ -706,6 +715,7 @@ function(capp_checkout_command)
         return()
       endif()
       if (NOT current_commit STREQUAL ${package}_COMMIT)
+        message("\nCApp checkout desired commit ${${package}_COMMIT} for ${package}\n")
         capp_execute(
           COMMAND "${GIT_EXECUTABLE}" checkout ${${package}_COMMIT}
           WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
@@ -723,10 +733,13 @@ endfunction()
 
 function(capp_pull_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_pull_command "" "RESULT_VARIABLE" "")
+  message("\nCApp is pulling the build repository\n")
   capp_execute(
     COMMAND "${GIT_EXECUTABLE}" pull
     WORKING_DIRECTORY "${CAPP_ROOT}"
     RESULT_VARIABLE pull_result
+    OUTPUT_QUIET
+    ERROR_QUIET
     )
   if (NOT pull_result EQUAL 0)
     set(${capp_pull_command_RESULT_VARIABLE} "${pull_result}" PARENT_SCOPE)
