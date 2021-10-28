@@ -703,7 +703,7 @@ function(capp_checkout_command)
       endif()
       message("\nCApp attempting to update current branch of ${package}\n")
       capp_execute(
-        COMMAND "${GIT_EXECUTABLE}" merge FETCH_HEAD
+        COMMAND "${GIT_EXECUTABLE}" merge --ff-only FETCH_HEAD
         WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
         )
       capp_get_commit(
