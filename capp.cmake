@@ -701,6 +701,7 @@ function(capp_checkout_command)
         set(${capp_checkout_command_RESULT_VARIABLE} "${fetch_result}" PARENT_SCOPE)
         return()
       endif()
+      message("\nCApp attempting to update current branch of ${package}\n")
       capp_execute(
         COMMAND "${GIT_EXECUTABLE}" merge FETCH_HEAD
         WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
@@ -715,7 +716,7 @@ function(capp_checkout_command)
         return()
       endif()
       if (NOT current_commit STREQUAL ${package}_COMMIT)
-        message("\nCApp checkout desired commit ${${package}_COMMIT} for ${package}\n")
+        message("\nCApp explicitly checking out desired commit ${${package}_COMMIT} for ${package}\n")
         capp_execute(
           COMMAND "${GIT_EXECUTABLE}" checkout ${${package}_COMMIT}
           WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
@@ -725,6 +726,8 @@ function(capp_checkout_command)
           set(${capp_checkout_command_RESULT_VARIABLE} "${checkout_result}" PARENT_SCOPE)
           return()
         endif()
+      else()
+        message("\nCApp noticed ${package} landed at the right commit after pulling\n")
       endif()
     endif()
   endforeach()
