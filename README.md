@@ -29,7 +29,7 @@ The drivers can be used from the cloned Git repository or the three files can be
 copied somewhere else (`capp.cmake` needs to be in the same directory as the driver).
 
 ```bash
-git clone git@github.com:SNLComputation/capp.git
+git clone git@github.com:sandialabs/capp.git
 cd capp
 cp capp.cmake capp.sh capp.bat /where/you/want
 ```
@@ -125,7 +125,7 @@ capp_package(
 
 The `GIT_URL` option should be a Git URL suitable for `git clone`
 and other commands.
-An example Git URL would be `git@github.com:SNLComputation/omega_h.git`.
+An example Git URL would be `git@github.com:sandialabs/omega_h.git`.
 While CApp doesn't impose restrictions on the type of Git URL,
 it has only been tested with SSH protocol URLs and not
 with HTTPS protocol URLs.
