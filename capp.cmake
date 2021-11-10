@@ -83,7 +83,7 @@ function(capp_clone)
   make_directory("${CAPP_SOURCE_ROOT}")
   message("\nCApp is cloning ${capp_clone_PACKAGE} from ${${capp_clone_PACKAGE}_GIT_URL}\n")
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" clone ${${capp_clone_PACKAGE}_GIT_URL} ${capp_clone_PACKAGE}
+    COMMAND "${GIT_EXECUTABLE}" clone --recurse-submodules ${${capp_clone_PACKAGE}_GIT_URL} ${capp_clone_PACKAGE}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
     RESULT_VARIABLE git_clone_result
     OUTPUT_QUIET
@@ -114,6 +114,15 @@ function(capp_clone)
       )
     if (NOT git_checkout_result EQUAL 0)
       set(${capp_clone_RESULT_VARIABLE} "${git_checkout_result}" PARENT_SCOPE)
+      return()
+    endif()
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      RESULT_VARIABLE submodule_result
+      )
+    if (NOT submodule_result EQUAL 0)
+      set(${capp_clone_RESULT_VARIABLE} "${submodule_result}" PARENT_SCOPE)
       return()
     endif()
   endif()
@@ -729,6 +738,15 @@ function(capp_checkout_command)
       else()
         message("\nCApp noticed ${package} landed at the right commit after pulling\n")
       endif()
+    endif()
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      RESULT_VARIABLE submodule_result
+      )
+    if (NOT submodule_result EQUAL 0)
+      set(${capp_checkout_command_RESULT_VARIABLE} "${submodule_result}" PARENT_SCOPE)
+      return()
     endif()
   endforeach()
   set(${capp_checkout_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
