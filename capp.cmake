@@ -29,7 +29,12 @@ function(capp_subdirectories)
 endfunction()
 
 function(capp_execute)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_execute "OUTPUT_QUIET;ERROR_QUIET" "WORKING_DIRECTORY;RESULT_VARIABLE;OUTPUT_VARIABLE;ERROR_VARIABLE" "COMMAND")
+  cmake_parse_arguments(PARSE_ARGV
+    0
+    capp_execute
+    "OUTPUT_QUIET;ERROR_QUIET;OUTPUT_STRIP_TRAILING_WHITESPACE"
+    "WORKING_DIRECTORY;RESULT_VARIABLE;OUTPUT_VARIABLE;ERROR_VARIABLE"
+    "COMMAND")
   set(extra_args)
   if (capp_execute_OUTPUT_VARIABLE)
     list(APPEND extra_args OUTPUT_VARIABLE capp_execute_output)
@@ -42,6 +47,9 @@ function(capp_execute)
   endif()
   if (capp_execute_ERROR_QUIET)
     list(APPEND extra_args ERROR_QUIET)
+  endif()
+  if (capp_execute_OUTPUT_STRIP_TRAILING_WHITESPACE)
+    list(APPEND extra_args OUTPUT_STRIP_TRAILING_WHITESPACE)
   endif()
   execute_process(
       COMMAND ${capp_execute_COMMAND}
@@ -113,6 +121,9 @@ function(capp_clone)
       ERROR_QUIET
       )
     if (NOT git_checkout_result EQUAL 0)
+      message("git checkout ${${capp_clone_PACKAGE}_COMMIT} failed in ${CAPP_SOURCE_ROOT}/${capp_clone_PACKAGE}")
+      message("This may mean that the Git URL ${${capp_clone_PACKAGE}_GIT_URL} is incorrect")
+      message("because it doesn't contain the desired commit.")
       set(${capp_clone_RESULT_VARIABLE} "${git_checkout_result}" PARENT_SCOPE)
       return()
     endif()
@@ -122,6 +133,7 @@ function(capp_clone)
       RESULT_VARIABLE submodule_result
       )
     if (NOT submodule_result EQUAL 0)
+      message("git submodule update --init --recursive failed")
       set(${capp_clone_RESULT_VARIABLE} "${submodule_result}" PARENT_SCOPE)
       return()
     endif()
@@ -410,6 +422,7 @@ function(capp_fulfill_needs)
         RESULT_VARIABLE capp_clone_result
       )
       if (NOT capp_clone_result EQUAL 0)
+        message("capp_clone for ${package} failed")
         set(${capp_fulfill_needs_RESULT_VARIABLE} "${capp_clone_result}" PARENT_SCOPE)
         return()
       endif()
@@ -421,6 +434,7 @@ function(capp_fulfill_needs)
         RESULT_VARIABLE capp_configure_result
       )
       if (NOT capp_configure_result EQUAL 0)
+        message("capp_configure for ${package} failed")
         set(${capp_fulfill_needs_RESULT_VARIABLE} "${capp_configure_result}" PARENT_SCOPE)
         return()
       endif()
@@ -434,6 +448,7 @@ function(capp_fulfill_needs)
         ${capp_fulfill_needs_BUILD_ARGUMENTS}
       )
       if (NOT capp_build_install_result EQUAL 0)
+        message("capp_build_install for ${package} failed")
         set(${capp_fulfill_needs_RESULT_VARIABLE} "${capp_build_install_result}" PARENT_SCOPE)
         return()
       endif()
@@ -472,23 +487,20 @@ function(capp_get_commit)
   endif()
 endfunction()
 
-function(capp_get_git_url)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_get_git_url "" "PACKAGE;GIT_URL_VARIABLE;RESULT_VARIABLE" "")
+function(capp_get_remote_url)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_get_remote_url "" "PACKAGE;REMOTE;GIT_URL_VARIABLE;RESULT_VARIABLE" "")
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" remote show -n origin
-    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_get_git_url_PACKAGE}"
-    RESULT_VARIABLE git_remote_show_result
-    OUTPUT_VARIABLE git_remote_show_output
+    COMMAND "${GIT_EXECUTABLE}" config --get remote.${capp_get_remote_url_REMOTE}.url
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_get_remote_url_PACKAGE}"
+    RESULT_VARIABLE git_remote_url_result
+    OUTPUT_VARIABLE git_remote_url_output
+    OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-  set(${capp_get_git_url_RESULT_VARIABLE} ${git_remote_show_result} PARENT_SCOPE)
-  if (NOT git_remote_show_result EQUAL 0)
+  set(${capp_get_remote_url_RESULT_VARIABLE} ${git_remote_url_result} PARENT_SCOPE)
+  if (NOT git_remote_url_result EQUAL 0)
     return()
   endif()
-  string(REGEX MATCH "Fetch URL: [^\n]+\n" git_fetch_url "${git_remote_show_output}")
-  string(LENGTH "Fetch URL: " header_length)
-  string(SUBSTRING "${git_fetch_url}" ${header_length} -1 git_url_newline)
-  string(STRIP "${git_url_newline}" git_url)
-  set(${capp_get_git_url_GIT_URL_VARIABLE} ${git_url} PARENT_SCOPE)
+  set(${capp_get_remote_url_GIT_URL_VARIABLE} ${git_remote_url_output} PARENT_SCOPE)
 endfunction()
 
 function(capp_init_command)
@@ -551,13 +563,14 @@ function(capp_clone_command)
   string(LENGTH "${git_directory_quoted}" git_directory_quoted_length)
   math(EXPR git_directory_length "${git_directory_quoted_length} - 2")
   string(SUBSTRING "${git_directory_quoted}" 1 ${git_directory_length} package)
-  capp_get_git_url(
+  capp_get_remote_url(
     PACKAGE ${package}
+    REMOTE origin
     GIT_URL_VARIABLE ${package}_GIT_URL
-    RESULT_VARIABLE capp_get_git_url_result
+    RESULT_VARIABLE capp_get_remote_url_result
   )
-  if (NOT capp_get_git_url_result EQUAL 0)
-    set(${capp_clone_command_RESULT_VARIABLE} ${capp_get_git_url_result} PARENT_SCOPE)
+  if (NOT capp_get_remote_url_result EQUAL 0)
+    set(${capp_clone_command_RESULT_VARIABLE} ${capp_get_remote_url_result} PARENT_SCOPE)
     return()
   endif()
   capp_get_commit(
@@ -594,32 +607,10 @@ function(capp_commit_command)
       return()
     endif()
     if (uncommitted_output)
-      message("${capp_commit_command_PACKAGE} has uncommitted changes:\n${uncommitted_output}")
+      message("\nCApp refusing to commit ${capp_commit_command_PACKAGE} because it has uncommitted changes:\n${uncommitted_output}")
       set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
       return()
     endif()
-  endif()
-  capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" log @{push}..
-    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
-    RESULT_VARIABLE unpushed_result
-    ERROR_QUIET
-    OUTPUT_VARIABLE unpushed_output)
-  if (unpushed_result EQUAL 0)
-    if (unpushed_output)
-      message("\n\nCApp commit fialed because ${capp_commit_command_PACKAGE} has unpushed commits:\n\n${unpushed_output}")
-      set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
-      return()
-    endif()
-  endif()
-  capp_get_git_url(
-    PACKAGE ${capp_commit_command_PACKAGE}
-    GIT_URL_VARIABLE new_git_url
-    RESULT_VARIABLE capp_get_git_url_result
-  )
-  if (NOT capp_get_git_url_result EQUAL 0)
-    set(${capp_commit_command_RESULT_VARIABLE} ${capp_get_git_url_result} PARENT_SCOPE)
-    return()
   endif()
   capp_get_commit(
     PACKAGE ${capp_commit_command_PACKAGE}
@@ -627,7 +618,84 @@ function(capp_commit_command)
     RESULT_VARIABLE capp_get_commit_result
   )
   if (NOT capp_get_commit_result EQUAL 0)
+    message("CApp commit command could not get the current commit for ${capp_commit_command_PACKAGE}")
     set(${capp_commit_command_RESULT_VARIABLE} ${capp_get_commit_result} PARENT_SCOPE)
+    return()
+  endif()
+  #this regex is designed to match a Git ref so that the remote
+  #is the first sub-expression and the branch is the second
+  set(remote_ref_regex "refs/remotes/([0-9A-Za-z_-]+)/([0-9A-Za-z\\./_-]+)")
+  #All the following work is just to figure out what Git URL to use,
+  #which we assume is the URL for one of the remotes.
+  set(remote)
+  #First, we pursue a common case of a package we keep up closely with that
+  #is checked out to a branch which has an upstream branch defined.
+  #If that is the case, the following command will print the ref of the upstream
+  #branch.
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" rev-parse --symbolic-full-name @{u}
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
+    RESULT_VARIABLE upstream_ref_result
+    ERROR_VARIABLE upstream_ref_error
+    OUTPUT_VARIABLE upstream_ref_output
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if (upstream_ref_result EQUAL 0)
+    string(REGEX REPLACE "${remote_ref_regex}" "\\1" remote "${upstream_ref_output}")
+  endif()
+  if (NOT remote)
+    #Now comes the harder case... we are checking out a "detached HEAD" commit
+    #of some repository, so there is no current branch let alone an upstream branch
+    #fortunately, Git still is able to tell us at least whether the current commit
+    #is pushed to any remote ref, and we can go from there.
+    #The following command will print lines that contain refs that contain the commit:
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" for-each-ref --contains ${new_commit}
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
+      RESULT_VARIABLE containing_refs_result
+      ERROR_VARIABLE containing_refs_error
+      OUTPUT_VARIABLE containing_refs_output)
+    if (NOT containing_refs_result EQUAL 0)
+      message("for ${capp_commit_command_PACKAGE}, git for-each-ref --contains ${new_commit} failed")
+      set(${capp_commit_command_RESULT_VARIABLE} ${containing_refs_result} PARENT_SCOPE)
+      return()
+    endif()
+    #MATCHALL will create a CMake list with all the remote refs that contain the commit
+    string(REGEX MATCHALL "${remote_ref_regex}" containing_remote_refs "${containing_refs_output}")
+    if (NOT containing_remote_refs)
+      #If there is nothing here, then there really is zero evidence that the current commit
+      #has ever left this machine and made it onto a Git host server.
+      #In this case we assume it is the common user error of not pushing their commits.
+      message("\nCApp refusing to commit ${capp_commit_command_PACKAGE} because commit ${new_commit} is not pushed to any remote!\n")
+      set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
+      return()
+    endif()
+    #If we are here, then we did find some remote refs that contain the current commit
+    #The following code creates a list of the remotes that those refs are in
+    set(containing_remotes)
+    foreach (containing_remote_ref IN LISTS containing_remote_refs)
+      string(REGEX REPLACE "${remote_ref_regex}" "\\1" containing_remote "${containing_remote_ref}")
+      list(APPEND containing_remotes ${containing_remote})
+    endforeach()
+    list(REMOVE_DUPLICATES containing_remotes)
+    #Now we need to pick one of those remotes as the official URL.
+    #all we know is origin is special, of if origin contains it then
+    #let's pick that one.
+    if ("origin" IN_LIST containing_remotes)
+      set(remote "origin")
+    else()
+      #Otherwise, let's just pick the first remote that contains this commit
+      list(GET containing_remotes 0 remote)
+    endif()
+  endif()
+  capp_get_remote_url(
+    PACKAGE ${capp_commit_command_PACKAGE}
+    REMOTE ${remote}
+    GIT_URL_VARIABLE new_git_url
+    RESULT_VARIABLE get_remote_url_result
+    )
+  if (NOT get_remote_url_result EQUAL 0)
+    message("failed to get the Git URL for remote ${remote} of ${capp_commit_command_PACKAGE}\n")
+    set(${capp_commit_command_RESULT_VARIABLE} "${get_remote_url_result}" PARENT_SCOPE)
     return()
   endif()
   file(READ "${CAPP_PACKAGE_ROOT}/${capp_commit_command_PACKAGE}/package.cmake" old_package_contents)
@@ -654,13 +722,14 @@ function(capp_checkout_command)
   foreach(package IN LISTS capp_checkout_command_PACKAGES)
     set(needs_reclone FALSE)
     if (EXISTS "${CAPP_SOURCE_ROOT}/${package}")
-      capp_get_git_url(
+      capp_get_remote_url(
         PACKAGE ${package}
+        REMOTE origin
         GIT_URL_VARIABLE current_git_url
-        RESULT_VARIABLE get_git_url_result
+        RESULT_VARIABLE get_remote_url_result
         )
-      if (NOT get_git_url_result EQUAL 0)
-        set(${capp_checkout_command_RESULT_VARIABLE} "${get_git_url_result}" PARENT_SCOPE)
+      if (NOT get_remote_url_result EQUAL 0)
+        set(${capp_checkout_command_RESULT_VARIABLE} "${get_remote_url_result}" PARENT_SCOPE)
         return()
       endif()
       if (NOT current_git_url STREQUAL ${package}_GIT_URL)
