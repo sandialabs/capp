@@ -97,7 +97,7 @@ endfunction()
 #should be at that branch and tracking the appropriate remote branch.
 function(capp_checkout)
   cmake_parse_arguments(PARSE_ARGV 0 capp_checkout "" "PACKAGE;RESULT_VARIABLE" "")
-  set(package ${capp_clone_PACKAGE})
+  set(package ${capp_checkout_PACKAGE})
   set(desired_commit ${${package}_COMMIT})
   set(desired_git_url ${${package}_GIT_URL})
   #Performance optimization: the common case is that the repository is already
@@ -114,7 +114,75 @@ function(capp_checkout)
   endif()
   if (current_commit STREQUAL desired_commit)
     message("debug: ${package} is already at the desired commit")
+    set(${capp_checkout_RESULT_VARIABLE} 0 PARENT_SCOPE)
     return()
+  endif()
+  #For multiple reasons (either fetching or picking a branch to check out),
+  #we need to identify which remote the desired URL maps to.
+  set(remote)
+  #In order to do that, we begin by gathering a list of existing remotes.
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" remote show
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+    RESULT_VARIABLE remote_show_result
+    OUTPUT_VARIABLE remote_show_output)
+  if (NOT remote_show_result EQUAL 0)
+    message("git remote show failed on ${package}")
+    set(${capp_checkout_RESULT_VARIABLE} ${remote_show_result} PARENT_SCOPE)
+    return()
+  endif()
+  #Replace any newlines with a semicolon,
+  #thus converting a one-line-per-remote string into a CMake list
+  string(REGEX REPLACE "[\r\n]+" ";" existing_remotes "${remote_show_output}")
+  list(REMOVE_ITEM existing_remotes "")
+  message("debug: in ${package}, existing_remotes=${existing_remotes}")
+  #Then we check if any of these remotes match the desired URL:
+  foreach(existing_remote IN LISTS existing_remotes)
+    capp_get_remote_url(
+      PACKAGE ${package}
+      REMOTE ${existing_remote}
+      GIT_URL_VARIABLE existing_remote_url
+      RESULT_VARIABLE remote_url_result)
+    if (NOT remote_show_result EQUAL 0)
+      message("failed to get URL for remote ${remote} of ${package}")
+      set(${capp_checkout_RESULT_VARIABLE} ${remote_url_result} PARENT_SCOPE)
+      return()
+    endif()
+    if (existing_remote_url STREQUAL desired_git_url)
+      set(remote ${existing_remote})
+    endif()
+  endforeach()
+  if (NOT remote)
+    #If we are here, then none of the existing remotes match the desired Git URL.
+    #In that case, CApp will go so far as to try to add it for you with a reasonable name.
+    #That reasonable name will be essentially the GitHub/GitLab organization/group path.
+    #The following crazy regex is just trying to extract the first component of the
+    #remote repository path.
+    string(REGEX REPLACE
+      ".*(:|\\.[a-z]+/)([A-Za-z0-9_-]+)/[A-Za-z0-9/_-]+(\\.git)?"
+      "\\2"
+      reasonable_remote_name
+      "${desired_git_url}")
+    message("debug: a reasonable name for the remote for ${desired_git_url} is ${reasonable_remote_name}")
+    if (reasonable_remote_name IN_LIST existing_remotes)
+      #If this reasonable name is already one of the remotes, let's just give up.
+      #It is best for the user to decide how to resolve this mess.
+      message("\nCApp wanted to add a remote ${reasonable_remote_name} with URL ${desired_git_url} to ${package} but it already exists.\n")
+      set(${capp_checkout_RESULT_VARIABLE} -1 PARENT_SCOPE)
+      return()
+    endif()
+    #We have a reasonable name and it isn't one of the remotes yet, let's add it
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" remote add ${reasonable_remote_name} ${desired_git_url}
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      RESULT_VARIABLE remote_add_result)
+    if (NOT remote_add_result EQUAL 0)
+      message("failed to add remote ${reasonable_remote_name} with URL ${desired_git_url} to ${package}")
+      set(${capp_checkout_RESULT_VARIABLE} ${remote_add_result} PARENT_SCOPE)
+      return()
+    endif()
+    message("debug: added remote ${reasonable_remote_name} with URL ${desired_git_url} to ${package}")
+    set(remote ${reasonable_remote_name})
   endif()
   #If we are here, then the repository is not at the desired commit.
   #Performance optimization: check to see if the commit exists in the
@@ -123,88 +191,36 @@ function(capp_checkout)
   #want this operation to succeed if it can) and is expensive.
   capp_execute(
     COMMAND "${GIT_EXECUTABLE}" cat-file -e ${desired_commit}^{commit}
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+    OUTPUT_QUIET
+    ERROR_QUIET
     RESULT_VARIABLE commit_exists_result)
   if (NOT commit_exists_result EQUAL 0)
     #If we are here, then the desired commit doesn't exist locally.
     #In that case, the next step
     #is to ensure the desired Git URL exists as a remote and has been fetched.
-    message("${package} desired commit ${desired_commit} doesn't exist locally; fetching.")
-    set(remote)
-    #In order to do that, we begin by gathering a list of existing remotes.
-    capp_execute(
-      COMMAND "${GIT_EXECUTABLE}" remote show
-      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-      RESULT_VARIABLE remote_show_result
-      OUTPUT_VARIABLE remote_show_output)
-    if (NOT remote_show_result EQUAL 0)
-      message("git remote show failed on ${package}")
-      set(${capp_checkout_RESULT_VARIABLE} ${remote_show_result} PARENT_SCOPE)
-      return()
-    endif()
-    message("debug: git remote show on ${package}:\n${remote_show_output}")
-    #Replace any newlines with a semicolon,
-    #thus converting a one-line-per-remote string into a CMake list
-    string(REGEX REPLACE "[\r\n]+" ";" existing_remotes "${remote_show_output}")
-    message("debug:existing_remotes=${existing_remotes}")
-    #Then we check if any of these remotes match the desired URL:
-    foreach(existing_remote IN LISTS existing_remotes)
-      capp_get_remote_url(
-        PACKAGE ${package}
-        REMOTE ${existing_remote}
-        GIT_URL_VARIABLE existing_remote_url
-        RESULT_VARIABLE remote_url_result)
-      if (NOT remote_show_result EQUAL 0)
-        message("failed to get URL for remote ${remote} of ${package}")
-        set(${capp_checkout_RESULT_VARIABLE} ${remote_url_result} PARENT_SCOPE)
-        return()
-      endif()
-      if (existing_remote_url STREQUAL desired_git_url)
-        set(remote ${existing_remote})
-      endif()
-    endforeach()
-    if (NOT remote)
-      #If we are here, then none of the existing remotes match the desired Git URL.
-      #In that case, CApp will go so far as to try to add it for you with a reasonable name.
-      #That reasonable name will be essentially the GitHub/GitLab organization/group path.
-      #The following crazy regex is just trying to extract that from an arbitrary Git URL.
-      string(REGEX REPLACE
-        ".*(:|\.[a-z]+/)([A-Za-z0-9/_-]+)/[A-Za-z0-9_-]+(\.git)?"
-        "\\2"
-        reasonable_remote_name
-        "${desired_git_url}")
-      message("debug: a reasonable name for the remote for ${desired_git_url} is ${reasonable_remote_name}")
-      if (reasonable_remote_name IN_LIST existing_remotes)
-        #If this reasonable name is already one of the remotes, let's just give up.
-        #It is best for the user to decide how to resolve this mess.
-        message("\nCApp wanted to add a remote ${reasonable_remote_name} with URL ${desired_git_url} to ${package} but it already exists.\n")
-        set(${capp_checkout_RESULT_VARIABLE} -1 PARENT_SCOPE)
-        return()
-      endif()
-      #We have a reasonable name and it isn't one of the remotes yet, let's add it
-      capp_execute(
-        COMMAND "${GIT_EXECUTABLE}" remote add ${reasonable_remote_name} ${desired_git_url}
-        RESULT_VARIABLE remote_add_result)
-      if (NOT remote_add_result EQUAL 0)
-        message("failed to add remote ${reasonable_remote_name} with URL ${desired_git_url} to ${package}")
-        set(${capp_checkout_RESULT_VARIABLE} ${remote_add_result} PARENT_SCOPE)
-        return()
-      endif()
-      message("debug: added remote ${reasonable_remote_name} with URL ${desired_git_url} to ${package}")
-      set(remote ${reasonable_remote_name})
-    endif()
+    message("debug: ${package} desired commit ${desired_commit} doesn't exist locally")
     #If we are here, then ${remote} is a remote with the right Git URL.
     #Let's fetch it.
+    message("debug: fetching remote ${remote} of ${package}")
     capp_execute(
       COMMAND "${GIT_EXECUTABLE}" fetch ${remote}
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      OUTPUT_QUIET
+      ERROR_QUIET
       RESULT_VARIABLE fetch_result)
     if (NOT fetch_result EQUAL 0)
       message("failed to fetch remote ${remote} of ${package}")
       set(${capp_checkout_RESULT_VARIABLE} ${fetch_result} PARENT_SCOPE)
       return()
     endif()
+    message("debug: succeeded in fetching remote ${remote} of ${package}")
     #Then let's check if the given commit exists now.
     capp_execute(
       COMMAND "${GIT_EXECUTABLE}" cat-file -e ${desired_commit}^{commit}
+      OUTPUT_QUIET
+      ERROR_QUIET
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
       RESULT_VARIABLE commit_exists_result)
     if (NOT commit_exists_result EQUAL 0)
       #If it doesn't, then this is user error and the desired commit isn't in the
@@ -218,10 +234,11 @@ function(capp_checkout)
   #for the package.
   #Now, we begin the process of checking it out as nicely as possible.
   #The main theme of this niceness is to check out a branch if possible.
-  #So, the first step is to see if any local or remote branches (actualy refs) point
-  #to the desired commit.
+  #So, the first step is to see if any remote branches (actualy refs) on the desired
+  #remote point to the desired commit.
   capp_execute(
     COMMAND "${GIT_EXECUTABLE}" for-each-ref --points-at=${desired_commit}
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
     OUTPUT_VARIABLE pointing_refs_output
     RESULT_VARIABLE pointing_refs_result)
   if (NOT pointing_refs_result EQUAL 0)
@@ -229,11 +246,68 @@ function(capp_checkout)
     set(${capp_checkout_RESULT_VARIABLE} ${pointing_refs_result} PARENT_SCOPE)
     return()
   endif()
-  message("debug: for ${package}, pointing_refs_output:\n${pointing_refs_output}")
-  #Replace whitespace with semicolons to create a CMake list
-  string(REGEX REPLACE "[ \t\r\n]+" ";" pointing_refs_at "${pointing_refs_output}")
-  list(REMOVE_ITEM pointing_refs_at "")
-  message("debug: for ${package}, pointing_refs_at=${pointing_refs_at}")
+  #Use MATCHALL to extract a CMake list of all the remote refs that point to the
+  #desired commit.
+  string(REGEX MATCHALL "refs/remotes/${remote}/[^ \t\r\n]+" pointing_refs "${pointing_refs_output}")
+  message("debug: in ${package}, pointing_refs=${pointing_refs}")
+  if (pointing_refs)
+    #At this point, there are some remote refs that point to the desired commit.
+    #Let's try to pick one of those as the branch to check out.
+    #Honestly, I can't think of much more than preferring the typical default
+    #branch names and after that just choosing the first one on the list.
+    if ("refs/remotes/${remote}/master" IN_LIST pointing_refs)
+      set(branch "master")
+    elseif ("refs/remotes/${remote}/main" IN_LIST pointing_refs)
+      set(branch "main")
+    else()
+      list(GET pointing_refs 0 pointing_ref)
+      string(REGEX REPLACE "${CAPP_REMOTE_REF_REGEX}" "\\2" branch "${pointing_ref}")
+    endif()
+    message("debug: in ${package}, picked branch ${branch}")
+    #Okay, we finally have a remote and a branch that we want to check out.
+    #Let's do it!
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" checkout -B ${branch} --track ${remote}/${branch}
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      OUTPUT_QUIET
+      ERROR_QUIET
+      RESULT_VARIABLE branch_checkout_result)
+    if (NOT branch_checkout_result EQUAL 0)
+      message("git checkout -B ${branch} --track ${remote}/${branch} failed in ${package}")
+      set(${capp_checkout_RESULT_VARIABLE} ${branch_checkout_result} PARENT_SCOPE)
+      return()
+    endif()
+    message("debug: in ${package}, checked out ${branch}, tracking ${remote}/${branch}")
+  else()
+    #If there are no remote refs that point to this commit, then it is a
+    #"detached HEAD" situation and we can just check out the desired commit.
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" checkout ${desired_commit}
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      RESULT_VARIABLE detached_checkout_result)
+    if (NOT detached_checkout_result EQUAL 0)
+      message("git checkout ${desired_commit} failed in ${package}")
+      set(${capp_checkout_RESULT_VARIABLE} ${detached_checkout_result} PARENT_SCOPE)
+      return()
+    endif()
+    message("debug: checked out commit ${desired_commit} explicitly")
+  endif()
+  #Aaaand by now we've succeeded in "git checkout"'ing a good thing.
+  #But we're not done yet! Submodules!
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+    RESULT_VARIABLE submodule_result
+    )
+  if (NOT submodule_result EQUAL 0)
+    message("git submodule update --init --recursive failed")
+    set(${capp_clone_RESULT_VARIABLE} "${submodule_result}" PARENT_SCOPE)
+    return()
+  endif()
+  message("debug: submodule update of ${package} completed")
+  message("debug: checkout of ${package} succeeded")
+  #We did it. We "checked out a commit".
+  set(${capp_clone_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
 function(capp_clone)
@@ -241,7 +315,7 @@ function(capp_clone)
   make_directory("${CAPP_SOURCE_ROOT}")
   message("\nCApp is cloning ${capp_clone_PACKAGE} from ${${capp_clone_PACKAGE}_GIT_URL}\n")
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" clone --recurse-submodules ${${capp_clone_PACKAGE}_GIT_URL} ${capp_clone_PACKAGE}
+    COMMAND "${GIT_EXECUTABLE}" clone ${${capp_clone_PACKAGE}_GIT_URL} ${capp_clone_PACKAGE}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
     RESULT_VARIABLE git_clone_result
     OUTPUT_QUIET
@@ -252,42 +326,15 @@ function(capp_clone)
     set(${capp_clone_RESULT_VARIABLE} "${git_clone_result}" PARENT_SCOPE)
     return()
   endif()
-  capp_get_commit(
-    PACKAGE ${package}
-    COMMIT_VARIABLE current_commit
-    RESULT_VARIABLE get_commit_result
-    )
-  if (NOT get_commit_result EQUAL 0)
-    set(${capp_clone_RESULT_VARIABLE} "${get_commit_result}" PARENT_SCOPE)
+  capp_checkout(
+    PACKAGE ${capp_clone_PACKAGE}
+    RESULT_VARIABLE checkout_result)
+  if (NOT checkout_result EQUAL 0)
+    message("\nCApp checkout of ${capp_clone_PACKAGE} failed\n")
+    set(${capp_clone_RESULT_VARIABLE} "${checkout_result}" PARENT_SCOPE)
     return()
   endif()
-  if (NOT current_commit STREQUAL ${capp_clone_PACKAGE}_COMMIT)
-    message("\nCApp is checking out desired commit ${${capp_clone_PACKAGE}_COMMIT} for ${capp_clone_PACKAGE}\n")
-    capp_execute(
-      COMMAND "${GIT_EXECUTABLE}" checkout ${${capp_clone_PACKAGE}_COMMIT}
-      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_clone_PACKAGE}"
-      RESULT_VARIABLE git_checkout_result
-      OUTPUT_QUIET
-      ERROR_QUIET
-      )
-    if (NOT git_checkout_result EQUAL 0)
-      message("git checkout ${${capp_clone_PACKAGE}_COMMIT} failed in ${CAPP_SOURCE_ROOT}/${capp_clone_PACKAGE}")
-      message("This may mean that the Git URL ${${capp_clone_PACKAGE}_GIT_URL} is incorrect")
-      message("because it doesn't contain the desired commit.")
-      set(${capp_clone_RESULT_VARIABLE} "${git_checkout_result}" PARENT_SCOPE)
-      return()
-    endif()
-    capp_execute(
-      COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive
-      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-      RESULT_VARIABLE submodule_result
-      )
-    if (NOT submodule_result EQUAL 0)
-      message("git submodule update --init --recursive failed")
-      set(${capp_clone_RESULT_VARIABLE} "${submodule_result}" PARENT_SCOPE)
-      return()
-    endif()
-  endif()
+  message("debug: clone of ${capp_clone_PACKAGE} succeeded\n")
   set(${capp_clone_RESULT_VARIABLE} 0 PARENT_SCOPE)
   set(${capp_clone_PACKAGE}_IS_CLONED TRUE PARENT_SCOPE)
 endfunction()
@@ -859,102 +906,22 @@ endfunction()
 function(capp_checkout_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_checkout_command "" "RESULT_VARIABLE" "PACKAGES")
   foreach(package IN LISTS capp_checkout_command_PACKAGES)
-    set(needs_reclone FALSE)
     if (EXISTS "${CAPP_SOURCE_ROOT}/${package}")
-      capp_get_remote_url(
+      capp_checkout(
         PACKAGE ${package}
-        REMOTE origin
-        GIT_URL_VARIABLE current_git_url
-        RESULT_VARIABLE get_remote_url_result
-        )
-      if (NOT get_remote_url_result EQUAL 0)
-        set(${capp_checkout_command_RESULT_VARIABLE} "${get_remote_url_result}" PARENT_SCOPE)
+        RESULT_VARIABLE checkout_result)
+      if (NOT checkout_result EQUAL 0)
+        set(${capp_checkout_command_RESULT_VARIABLE} ${checkout_result} PARENT_SCOPE)
         return()
-      endif()
-      if (NOT current_git_url STREQUAL ${package}_GIT_URL)
-        message("\nCApp needs to reclone ${package} since its current Git URL doesn't match what is in the package file\n")
-        set(needs_reclone TRUE)
       endif()
     else()
-      message("\nCApp needs to clone ${package} since it isn't cloned yet\n")
-      set(needs_reclone TRUE)
-    endif()
-    if (needs_reclone)
-      file(REMOVE_RECURSE "${CAPP_SOURCE_ROOT}/${package}")
       capp_clone(
         PACKAGE ${package}
-        RESULT_VARIABLE clone_result
-        )
+        RESULT_VARIABLE clone_result)
       if (NOT clone_result EQUAL 0)
-        set(${capp_checkout_command_RESULT_VARIABLE} "${clone_result}" PARENT_SCOPE)
+        set(${capp_checkout_command_RESULT_VARIABLE} ${clone_result} PARENT_SCOPE)
         return()
       endif()
-      file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
-    endif()
-    capp_get_commit(
-      PACKAGE ${package}
-      COMMIT_VARIABLE current_commit
-      RESULT_VARIABLE get_commit_result
-      )
-    if (NOT get_commit_result EQUAL 0)
-      set(${capp_checkout_command_RESULT_VARIABLE} "${get_commit_result}" PARENT_SCOPE)
-      return()
-    endif()
-    if (NOT current_commit STREQUAL ${package}_COMMIT)
-      message("\nCApp noticed ${package} isn't at the desired commit\n")
-      file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
-      #instead of executing "git pull", we execute "git fetch" and "git merge FETCH_HEAD"
-      #separately because if "git merge FETCH_HEAD" fails "git checkout" might still
-      #be able to checkout the correct commit
-      message("\nCApp is fetching ${package} in case the desired commit doesn't exist locally\n")
-      capp_execute(
-        COMMAND "${GIT_EXECUTABLE}" fetch
-        WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-        RESULT_VARIABLE fetch_result
-        OUTPUT_QUIET
-        ERROR_QUIET
-        )
-      if (NOT fetch_result EQUAL 0)
-        set(${capp_checkout_command_RESULT_VARIABLE} "${fetch_result}" PARENT_SCOPE)
-        return()
-      endif()
-      message("\nCApp attempting to update current branch of ${package}\n")
-      capp_execute(
-        COMMAND "${GIT_EXECUTABLE}" merge --ff-only FETCH_HEAD
-        WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-        )
-      capp_get_commit(
-        PACKAGE ${package}
-        COMMIT_VARIABLE current_commit
-        RESULT_VARIABLE get_commit_result
-        )
-      if (NOT get_commit_result EQUAL 0)
-        set(${capp_checkout_command_RESULT_VARIABLE} "${get_commit_result}" PARENT_SCOPE)
-        return()
-      endif()
-      if (NOT current_commit STREQUAL ${package}_COMMIT)
-        message("\nCApp explicitly checking out desired commit ${${package}_COMMIT} for ${package}\n")
-        capp_execute(
-          COMMAND "${GIT_EXECUTABLE}" checkout ${${package}_COMMIT}
-          WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-          RESULT_VARIABLE checkout_result
-          )
-        if (NOT checkout_result EQUAL 0)
-          set(${capp_checkout_command_RESULT_VARIABLE} "${checkout_result}" PARENT_SCOPE)
-          return()
-        endif()
-      else()
-        message("\nCApp noticed ${package} landed at the right commit after pulling\n")
-      endif()
-    endif()
-    capp_execute(
-      COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive
-      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-      RESULT_VARIABLE submodule_result
-      )
-    if (NOT submodule_result EQUAL 0)
-      set(${capp_checkout_command_RESULT_VARIABLE} "${submodule_result}" PARENT_SCOPE)
-      return()
     endif()
   endforeach()
   set(${capp_checkout_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
