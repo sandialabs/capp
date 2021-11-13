@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.15...3.21.1)
 
 set(CAPP_TRUE TRUE)
+#this regex is designed to match a Git ref so that the remote
+#is the first sub-expression and the branch is the second
+set(CAPP_REMOTE_REF_REGEX "refs/remotes/([0-9A-Za-z_-]+)/([0-9A-Za-z\\./_-]+)")
 
 if (WIN32)
   set(CMAKE_PROGRAM_PATH "C:/Program Files") #workaround a workaround for MSVC 2017 in FindGit.cmake
@@ -84,6 +87,153 @@ function(capp_commit)
     RESULT_VARIABLE git_commit_result
   )
   set(${capp_commit_RESULT_VARIABLE} ${git_commit_result} PARENT_SCOPE)
+endfunction()
+
+#This function's main purpose is to get the repository at source/<package>
+#to be at the commit specified in package/<package>/package.cmake
+#(technically, whatever is already in ${package}_COMMIT and ${package}_GIT_URL)
+#It also aims to do this as nicely as possible.
+#For example, if that commit is the head of a branch, then the repository
+#should be at that branch and tracking the appropriate remote branch.
+function(capp_checkout)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_checkout "" "PACKAGE;RESULT_VARIABLE" "")
+  set(package ${capp_clone_PACKAGE})
+  set(desired_commit ${${package}_COMMIT})
+  set(desired_git_url ${${package}_GIT_URL})
+  #Performance optimization: the common case is that the repository is already
+  #at this commit. In that case, just exit early.
+  capp_get_commit(
+    PACKAGE ${package}
+    COMMIT_VARIABLE current_commit
+    RESULT_VARIABLE get_commit_result
+    )
+  if (NOT get_commit_result EQUAL 0)
+    message("failed to get the current commit of ${package}")
+    set(${capp_checkout_RESULT_VARIABLE} "${get_commit_result}" PARENT_SCOPE)
+    return()
+  endif()
+  if (current_commit STREQUAL desired_commit)
+    message("debug: ${package} is already at the desired commit")
+    return()
+  endif()
+  #If we are here, then the repository is not at the desired commit.
+  #Performance optimization: check to see if the commit exists in the
+  #local repository first before going to the fetching step, because
+  #fetching may not be possible in some cases (in which case we still
+  #want this operation to succeed if it can) and is expensive.
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" cat-file -e ${desired_commit}^{commit}
+    RESULT_VARIABLE commit_exists_result)
+  if (NOT commit_exists_result EQUAL 0)
+    #If we are here, then the desired commit doesn't exist locally.
+    #In that case, the next step
+    #is to ensure the desired Git URL exists as a remote and has been fetched.
+    message("${package} desired commit ${desired_commit} doesn't exist locally; fetching.")
+    set(remote)
+    #In order to do that, we begin by gathering a list of existing remotes.
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" remote show
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      RESULT_VARIABLE remote_show_result
+      OUTPUT_VARIABLE remote_show_output)
+    if (NOT remote_show_result EQUAL 0)
+      message("git remote show failed on ${package}")
+      set(${capp_checkout_RESULT_VARIABLE} ${remote_show_result} PARENT_SCOPE)
+      return()
+    endif()
+    message("debug: git remote show on ${package}:\n${remote_show_output}")
+    #Replace any newlines with a semicolon,
+    #thus converting a one-line-per-remote string into a CMake list
+    string(REGEX REPLACE "[\r\n]+" ";" existing_remotes "${remote_show_output}")
+    message("debug:existing_remotes=${existing_remotes}")
+    #Then we check if any of these remotes match the desired URL:
+    foreach(existing_remote IN LISTS existing_remotes)
+      capp_get_remote_url(
+        PACKAGE ${package}
+        REMOTE ${existing_remote}
+        GIT_URL_VARIABLE existing_remote_url
+        RESULT_VARIABLE remote_url_result)
+      if (NOT remote_show_result EQUAL 0)
+        message("failed to get URL for remote ${remote} of ${package}")
+        set(${capp_checkout_RESULT_VARIABLE} ${remote_url_result} PARENT_SCOPE)
+        return()
+      endif()
+      if (existing_remote_url STREQUAL desired_git_url)
+        set(remote ${existing_remote})
+      endif()
+    endforeach()
+    if (NOT remote)
+      #If we are here, then none of the existing remotes match the desired Git URL.
+      #In that case, CApp will go so far as to try to add it for you with a reasonable name.
+      #That reasonable name will be essentially the GitHub/GitLab organization/group path.
+      #The following crazy regex is just trying to extract that from an arbitrary Git URL.
+      string(REGEX REPLACE
+        ".*(:|\.[a-z]+/)([A-Za-z0-9/_-]+)/[A-Za-z0-9_-]+(\.git)?"
+        "\\2"
+        reasonable_remote_name
+        "${desired_git_url}")
+      message("debug: a reasonable name for the remote for ${desired_git_url} is ${reasonable_remote_name}")
+      if (reasonable_remote_name IN_LIST existing_remotes)
+        #If this reasonable name is already one of the remotes, let's just give up.
+        #It is best for the user to decide how to resolve this mess.
+        message("\nCApp wanted to add a remote ${reasonable_remote_name} with URL ${desired_git_url} to ${package} but it already exists.\n")
+        set(${capp_checkout_RESULT_VARIABLE} -1 PARENT_SCOPE)
+        return()
+      endif()
+      #We have a reasonable name and it isn't one of the remotes yet, let's add it
+      capp_execute(
+        COMMAND "${GIT_EXECUTABLE}" remote add ${reasonable_remote_name} ${desired_git_url}
+        RESULT_VARIABLE remote_add_result)
+      if (NOT remote_add_result EQUAL 0)
+        message("failed to add remote ${reasonable_remote_name} with URL ${desired_git_url} to ${package}")
+        set(${capp_checkout_RESULT_VARIABLE} ${remote_add_result} PARENT_SCOPE)
+        return()
+      endif()
+      message("debug: added remote ${reasonable_remote_name} with URL ${desired_git_url} to ${package}")
+      set(remote ${reasonable_remote_name})
+    endif()
+    #If we are here, then ${remote} is a remote with the right Git URL.
+    #Let's fetch it.
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" fetch ${remote}
+      RESULT_VARIABLE fetch_result)
+    if (NOT fetch_result EQUAL 0)
+      message("failed to fetch remote ${remote} of ${package}")
+      set(${capp_checkout_RESULT_VARIABLE} ${fetch_result} PARENT_SCOPE)
+      return()
+    endif()
+    #Then let's check if the given commit exists now.
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" cat-file -e ${desired_commit}^{commit}
+      RESULT_VARIABLE commit_exists_result)
+    if (NOT commit_exists_result EQUAL 0)
+      #If it doesn't, then this is user error and the desired commit isn't in the
+      #desired Git URL.
+      message("\nCApp can't find commit ${desired_commit} of ${package} even after fetching from ${desired_git_url}\n")
+      set(${capp_checkout_RESULT_VARIABLE} -1 PARENT_SCOPE)
+      return()
+    endif()
+  endif()
+  #If we're here, then the desired commit does exist in the local Git repository
+  #for the package.
+  #Now, we begin the process of checking it out as nicely as possible.
+  #The main theme of this niceness is to check out a branch if possible.
+  #So, the first step is to see if any local or remote branches (actualy refs) point
+  #to the desired commit.
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" for-each-ref --points-at=${desired_commit}
+    OUTPUT_VARIABLE pointing_refs_output
+    RESULT_VARIABLE pointing_refs_result)
+  if (NOT pointing_refs_result EQUAL 0)
+    message("git for-each-ref --points-at=${desired_commit} failed for ${package}")
+    set(${capp_checkout_RESULT_VARIABLE} ${pointing_refs_result} PARENT_SCOPE)
+    return()
+  endif()
+  message("debug: for ${package}, pointing_refs_output:\n${pointing_refs_output}")
+  #Replace whitespace with semicolons to create a CMake list
+  string(REGEX REPLACE "[ \t\r\n]+" ";" pointing_refs_at "${pointing_refs_output}")
+  list(REMOVE_ITEM pointing_refs_at "")
+  message("debug: for ${package}, pointing_refs_at=${pointing_refs_at}")
 endfunction()
 
 function(capp_clone)
@@ -622,9 +772,6 @@ function(capp_commit_command)
     set(${capp_commit_command_RESULT_VARIABLE} ${capp_get_commit_result} PARENT_SCOPE)
     return()
   endif()
-  #this regex is designed to match a Git ref so that the remote
-  #is the first sub-expression and the branch is the second
-  set(remote_ref_regex "refs/remotes/([0-9A-Za-z_-]+)/([0-9A-Za-z\\./_-]+)")
   #All the following work is just to figure out what Git URL to use,
   #which we assume is the URL for one of the remotes.
   set(remote)
@@ -640,14 +787,14 @@ function(capp_commit_command)
     OUTPUT_VARIABLE upstream_ref_output
     OUTPUT_STRIP_TRAILING_WHITESPACE)
   if (upstream_ref_result EQUAL 0)
-    string(REGEX REPLACE "${remote_ref_regex}" "\\1" remote "${upstream_ref_output}")
+    string(REGEX REPLACE "${CAPP_REMOTE_REF_REGEX}" "\\1" remote "${upstream_ref_output}")
   endif()
   if (NOT remote)
     #Now comes the harder case... we are checking out a "detached HEAD" commit
-    #of some repository, so there is no current branch let alone an upstream branch
-    #fortunately, Git still is able to tell us at least whether the current commit
+    #of some repository, so there is no current branch let alone an upstream branch.
+    #Fortunately, Git still is able to tell us at least whether the current commit
     #is pushed to any remote ref, and we can go from there.
-    #The following command will print lines that contain refs that contain the commit:
+    #The following command will print lines that contain remotes that contain the commit:
     capp_execute(
       COMMAND "${GIT_EXECUTABLE}" for-each-ref --contains ${new_commit}
       WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
@@ -659,24 +806,16 @@ function(capp_commit_command)
       set(${capp_commit_command_RESULT_VARIABLE} ${containing_refs_result} PARENT_SCOPE)
       return()
     endif()
-    #MATCHALL will create a CMake list with all the remote refs that contain the commit
-    string(REGEX MATCHALL "${remote_ref_regex}" containing_remote_refs "${containing_refs_output}")
-    if (NOT containing_remote_refs)
-      #If there is nothing here, then there really is zero evidence that the current commit
-      #has ever left this machine and made it onto a Git host server.
-      #In this case we assume it is the common user error of not pushing their commits.
-      message("\nCApp refusing to commit ${capp_commit_command_PACKAGE} because commit ${new_commit} is not pushed to any remote!\n")
-      set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
-      return()
-    endif()
-    #If we are here, then we did find some remote refs that contain the current commit
-    #The following code creates a list of the remotes that those refs are in
+    message("for ${capp_commit_command_PACKAGE}, containing_refs_output:\n${containing_refs_output}")
+    #This regex filter extracts the remote refs from the previous command's output
+    string(REGEX MATCHALL "${CAPP_REMOTE_REF_REGEX}" containing_refs "${containing_refs_output}")
     set(containing_remotes)
-    foreach (containing_remote_ref IN LISTS containing_remote_refs)
-      string(REGEX REPLACE "${remote_ref_regex}" "\\1" containing_remote "${containing_remote_ref}")
+    foreach(containing_ref IN LISTS containing_refs)
+      #Use the subexpressions built into the remote ref regex to extract the remote
+      string(REGEX REPLACE "${CAPP_REMOTE_REF_REGEX}" "\\1" containing_remote "${containing_ref}")
       list(APPEND containing_remotes ${containing_remote})
     endforeach()
-    list(REMOVE_DUPLICATES containing_remotes)
+    message("for ${capp_commit_command_PACKAGE}, containing_remotes=${containing_remotes}")
     #Now we need to pick one of those remotes as the official URL.
     #all we know is origin is special, of if origin contains it then
     #let's pick that one.
