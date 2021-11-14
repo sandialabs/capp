@@ -831,10 +831,25 @@ function(capp_commit_command)
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
     RESULT_VARIABLE upstream_ref_result
     ERROR_VARIABLE upstream_ref_error
-    OUTPUT_VARIABLE upstream_ref_output
+    OUTPUT_VARIABLE upstream_ref
     OUTPUT_STRIP_TRAILING_WHITESPACE)
   if (upstream_ref_result EQUAL 0)
-    string(REGEX REPLACE "${CAPP_REMOTE_REF_REGEX}" "\\1" remote "${upstream_ref_output}")
+    #If we are here then there is a clear upstream ref.
+    message("debug: for ${capp_commit_command_PACKAGE}, there is a clear upstream ref ${upstream_ref}")
+    string(REGEX REPLACE "${CAPP_REMOTE_REF_REGEX}" "\\1" remote "${upstream_ref}")
+    string(REGEX REPLACE "${CAPP_REMOTE_REF_REGEX}" "\\2" branch "${upstream_ref}")
+    #Now, it's still important that we check whether the current commit has been pushed
+    #to the clear upstream branch in this case.
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" merge-base --is-ancestor ${new_commit} ${remote}/${branch}
+      WORKING_DIRECTORY  "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
+      RESULT_VARIABLE is_ancestor_result)
+    if (NOT is_ancestor_result EQUAL 0)
+      message("\nCApp refusing to commit ${capp_commit_command_PACKAGE} because the current commit ${new_commit} is not pushed to the upstream branch ${branch} on remote ${remote}\n")
+      set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
+      return()
+    endif()
+    message("debug: branch ${branch} on remote ${remote} contains commit ${new_commit}")
   endif()
   if (NOT remote)
     #Now comes the harder case... we are checking out a "detached HEAD" commit
@@ -853,16 +868,26 @@ function(capp_commit_command)
       set(${capp_commit_command_RESULT_VARIABLE} ${containing_refs_result} PARENT_SCOPE)
       return()
     endif()
-    message("for ${capp_commit_command_PACKAGE}, containing_refs_output:\n${containing_refs_output}")
-    #This regex filter extracts the remote refs from the previous command's output
-    string(REGEX MATCHALL "${CAPP_REMOTE_REF_REGEX}" containing_refs "${containing_refs_output}")
+    #MATCHALL will create a CMake list with all the remote refs that contain the commit
+    string(REGEX MATCHALL "${CAPP_REMOTE_REF_REGEX}" containing_remote_refs "${containing_refs_output}")
+    if (NOT containing_remote_refs)
+      #If there is nothing here, then there really is zero evidence that the current commit
+      #has ever left this machine and made it onto a Git host server.
+      #In this case we assume it is the common user error of not pushing their commits.
+      message("\nCApp refusing to commit ${capp_commit_command_PACKAGE} because commit ${new_commit} is not pushed to any remote!\n")
+      set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
+      return()
+    endif()
+    #If we are here, then we did find some remote refs that contain the current commit
+    #The following code creates a list of the remotes that those refs are in
     set(containing_remotes)
-    foreach(containing_ref IN LISTS containing_refs)
+    foreach(containing_remote_ref IN LISTS containing_remote_refs)
       #Use the subexpressions built into the remote ref regex to extract the remote
-      string(REGEX REPLACE "${CAPP_REMOTE_REF_REGEX}" "\\1" containing_remote "${containing_ref}")
+      string(REGEX REPLACE "${CAPP_REMOTE_REF_REGEX}" "\\1" containing_remote "${containing_remote_ref}")
       list(APPEND containing_remotes ${containing_remote})
     endforeach()
-    message("for ${capp_commit_command_PACKAGE}, containing_remotes=${containing_remotes}")
+    list(REMOVE_DUPLICATES containing_remotes)
+    message("debug: for ${capp_commit_command_PACKAGE}, containing_remotes=${containing_remotes}")
     #Now we need to pick one of those remotes as the official URL.
     #all we know is origin is special, of if origin contains it then
     #let's pick that one.
@@ -873,6 +898,7 @@ function(capp_commit_command)
       list(GET containing_remotes 0 remote)
     endif()
   endif()
+  message("debug: chose remote ${remote} to commit ${capp_commit_command_PACKAGE}")
   capp_get_remote_url(
     PACKAGE ${capp_commit_command_PACKAGE}
     REMOTE ${remote}
