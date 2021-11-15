@@ -307,7 +307,7 @@ function(capp_checkout)
   message("debug: submodule update of ${package} completed")
   message("debug: checkout of ${package} succeeded")
   #We did it. We "checked out a commit".
-  set(${capp_clone_RESULT_VARIABLE} 0 PARENT_SCOPE)
+  set(${capp_checkout_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
 function(capp_clone)
