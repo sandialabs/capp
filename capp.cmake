@@ -89,6 +89,32 @@ function(capp_commit)
   set(${capp_commit_RESULT_VARIABLE} ${git_commit_result} PARENT_SCOPE)
 endfunction()
 
+function(capp_changes_committed)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_changes_committed "" "PACKAGE;RESULT_VARIABLE;OUTPUT_VARIABLE" "")
+  set(package ${capp_changes_committed_PACKAGE})
+  set(result_variable ${capp_changes_committed_RESULT_VARIABLE})
+  set(output_variable ${capp_changes_committed_OUTPUT_VARIABLE})
+  if (${package}_IGNORE_UNCOMMITTED)
+    set(${result_variable} 0 PARENT_SCOPE)
+    return()
+  endif()
+  capp_execute(
+    COMMAND "${GIT_EXECUTABLE}" status --porcelain
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+    RESULT_VARIABLE git_uncommitted_result
+    OUTPUT_VARIABLE git_uncommitted_output)
+  if (NOT git_uncommitted_result EQUAL 0)
+    set(${result_variable} ${git_uncommitted_result} PARENT_SCOPE)
+    return()
+  endif()
+  if (git_uncommitted_output)
+    set(${output_variable} "${git_uncommitted_output}" PARENT_SCOPE)
+    set(${result_variable} -1 PARENT_SCOPE)
+    return()
+  endif()
+  set(${result_variable} 0 PARENT_SCOPE)
+endfunction()
+
 #This function's main purpose is to get the repository at source/<package>
 #to be at the commit specified in package/<package>/package.cmake
 #(technically, whatever is already in ${package}_COMMIT and ${package}_GIT_URL)
@@ -100,6 +126,17 @@ function(capp_checkout)
   set(package ${capp_checkout_PACKAGE})
   set(desired_commit ${${package}_COMMIT})
   set(desired_git_url ${${package}_GIT_URL})
+  #Safety check: make sure there are not uncommitted changes, otherwise the
+  #package can't really be checked out to the desired commit.
+  capp_changes_committed(
+    PACKAGE ${package}
+    RESULT_VARIABLE uncommitted_result
+    OUTPUT_VARIABLE uncommitted_output)
+  if (NOT uncommitted_result EQUAL 0)
+    message("\nCApp refusing to check out ${package} because it has uncommitted changes:\n${uncommitted_output}")
+    set(${capp_checkout_RESULT_VARIABLE} -1 PARENT_SCOPE)
+    return()
+  endif()
   #Performance optimization: the common case is that the repository is already
   #at this commit. In that case, just exit early.
   capp_get_commit(
@@ -148,7 +185,9 @@ function(capp_checkout)
       set(${capp_checkout_RESULT_VARIABLE} ${remote_url_result} PARENT_SCOPE)
       return()
     endif()
+    message("debug: ${package} remote ${existing_remote} has URL ${existing_remote_url}")
     if (existing_remote_url STREQUAL desired_git_url)
+      message("debug: ${package} remote ${existing_remote} matches desired URL ${desired_git_url}")
       set(remote ${existing_remote})
     endif()
   endforeach()
@@ -284,6 +323,8 @@ function(capp_checkout)
     capp_execute(
       COMMAND "${GIT_EXECUTABLE}" checkout ${desired_commit}
       WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      OUTPUT_QUIET
+      ERROR_QUIET
       RESULT_VARIABLE detached_checkout_result)
     if (NOT detached_checkout_result EQUAL 0)
       message("git checkout ${desired_commit} failed in ${package}")
@@ -793,21 +834,15 @@ endfunction()
 
 function(capp_commit_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_commit_command "" "PACKAGE;RESULT_VARIABLE" "")
-  if (NOT ${capp_commit_command_PACKAGE}_IGNORE_UNCOMMITTED)
-    capp_execute(
-      COMMAND "${GIT_EXECUTABLE}" status --porcelain
-      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_commit_command_PACKAGE}"
-      RESULT_VARIABLE uncommitted_result
-      OUTPUT_VARIABLE uncommitted_output)
-    if (NOT uncommitted_result EQUAL 0)
-      set(${capp_commit_command_RESULT_VARIABLE} ${uncommitted_result} PARENT_SCOPE)
-      return()
-    endif()
-    if (uncommitted_output)
-      message("\nCApp refusing to commit ${capp_commit_command_PACKAGE} because it has uncommitted changes:\n${uncommitted_output}")
-      set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
-      return()
-    endif()
+  #Safety check: make sure all the user's changes are committed before proceeding.
+  capp_changes_committed(
+    PACKAGE ${capp_commit_command_PACKAGE}
+    RESULT_VARIABLE uncommitted_result
+    OUTPUT_VARIABLE uncommitted_output)
+  if (NOT uncommitted_result EQUAL 0)
+    message("\nCApp refusing to commit ${capp_commit_command_PACKAGE} because it has uncommitted changes:\n${uncommitted_output}")
+    set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
+    return()
   endif()
   capp_get_commit(
     PACKAGE ${capp_commit_command_PACKAGE}
