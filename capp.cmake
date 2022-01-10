@@ -121,6 +121,7 @@ endfunction()
 #It also aims to do this as nicely as possible.
 #For example, if that commit is the head of a branch, then the repository
 #should be at that branch and tracking the appropriate remote branch.
+
 function(capp_checkout)
   cmake_parse_arguments(PARSE_ARGV 0 capp_checkout "" "PACKAGE;RESULT_VARIABLE" "")
   set(package ${capp_checkout_PACKAGE})
@@ -137,7 +138,7 @@ function(capp_checkout)
     set(${capp_checkout_RESULT_VARIABLE} -1 PARENT_SCOPE)
     return()
   endif()
-  #Performance optimization: the common case is that the repository is already
+  #The common case is that the repository is already
   #at this commit. In that case, just exit early.
   capp_get_commit(
     PACKAGE ${package}
@@ -152,6 +153,9 @@ function(capp_checkout)
   if (current_commit STREQUAL desired_commit)
     message("debug: ${package} is already at the desired commit")
   else()
+    #From here on out we will be trying to change the commit that a package
+    #is checked out to, so we will mark it as needing re-configuration
+    capp_delete_configuration(${package})
     #For multiple reasons (either fetching or picking a branch to check out),
     #we need to identify which remote the desired URL maps to.
     set(remote)
