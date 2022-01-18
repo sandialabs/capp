@@ -66,12 +66,10 @@ whose signature is as follows:
 
 ```cmake
 capp_app(
-  NAME app_name
   ROOT_PACKAGES package1 [package2 ... ]
   [BUILD_TYPE <type>])
 ```
 
-Where `NAME` should be the name of your overall application.
 `ROOT_PACKAGES` should be the list of packages that CApp
 must always try to compile.
 CApp will try to build all packages that `ROOT_PACKAGES`
