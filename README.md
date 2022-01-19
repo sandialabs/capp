@@ -66,9 +66,34 @@ whose signature is as follows:
 
 ```cmake
 capp_app(
+  [CONFIGURATION_FILE config_file]
   ROOT_PACKAGES package1 [package2 ... ]
-  [BUILD_TYPE <type>])
+  [BUILD_TYPE type])
 ```
+
+`CONFIGURATION_FILE` gives the path to a file that should define configuration variables
+for the build.
+This configuration file will be loaded via a cmake `include()` command during the execution
+of the `capp_app` command, so any variables it sets will be available after `capp_app`
+and in the individual package files.
+For example, if there is an option in package `foo` called `FOO_ENABLE_FAST`,
+and you'd like to control this at the overall application layer, you could put the following
+in a file called `config.cmake` in the build repository's root directory:
+
+```cmake
+set(MY_APP_ENABLE_FAST TRUE)
+```
+
+Then the file `packages/foo/package.cmake` could do the following:
+```cmake
+capp_package(
+  OPTIONS
+  "-DFOO_ENABLE_FAST=${MY_APP_ENABLE_FAST}"
+  )
+```
+
+If the `CONFIGURATION_FILE` or `app.cmake` are altered at any time, it will trigger a re-configuration
+of all packages.
 
 `ROOT_PACKAGES` should be the list of packages that CApp
 must always try to compile.
