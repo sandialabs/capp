@@ -453,7 +453,7 @@ function(capp_install)
 endfunction()
 
 macro(capp_app)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_app "" "CONFIGURATION_FILE;BUILD_TYPE" "ROOT_PACKAGES")
+  cmake_parse_arguments(capp_app "" "CONFIGURATION_FILE;BUILD_TYPE" "ROOT_PACKAGES" ${ARGN})
   set(CAPP_ROOT_PACKAGES "${capp_app_ROOT_PACKAGES}")
   set(build_type "${capp_app_BUILD_TYPE}")
   if (NOT build_type)
