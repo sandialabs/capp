@@ -84,7 +84,9 @@ in a file called `config.cmake` in the build repository's root directory:
 set(MY_APP_ENABLE_FAST TRUE)
 ```
 
+After that you can set `CONFIGURATION_FILE` to `config.cmake` in the `app.cmake` file.
 Then the file `packages/foo/package.cmake` could do the following:
+
 ```cmake
 capp_package(
   OPTIONS
