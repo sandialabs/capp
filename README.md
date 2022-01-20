@@ -66,36 +66,9 @@ whose signature is as follows:
 
 ```cmake
 capp_app(
-  [CONFIGURATION_FILE config_file]
   ROOT_PACKAGES package1 [package2 ... ]
   [BUILD_TYPE type])
 ```
-
-`CONFIGURATION_FILE` gives the path to a file that should define configuration variables
-for the build.
-This configuration file will be loaded via a cmake `include()` command during the execution
-of the `capp_app` command, so any variables it sets will be available after `capp_app`
-and in the individual package files.
-For example, if there is an option in package `foo` called `FOO_ENABLE_FAST`,
-and you'd like to control this at the overall application layer, you could put the following
-in a file called `config.cmake` in the build repository's root directory:
-
-```cmake
-set(MY_APP_ENABLE_FAST TRUE)
-```
-
-After that you can set `CONFIGURATION_FILE` to `config.cmake` in the `app.cmake` file.
-Then the file `packages/foo/package.cmake` could do the following:
-
-```cmake
-capp_package(
-  OPTIONS
-  "-DFOO_ENABLE_FAST=${MY_APP_ENABLE_FAST}"
-  )
-```
-
-If the `CONFIGURATION_FILE` or `app.cmake` are altered at any time, it will trigger a re-configuration
-of all packages.
 
 `ROOT_PACKAGES` should be the list of packages that CApp
 must always try to compile.
@@ -110,6 +83,45 @@ just the application package.
 By default, CApp will configure all packages with `-DCMAKE_BUILD_TYPE=RelWithDebInfo`.
 The `BUILD_TYPE` argument can be used to change the build type to something else
 (CMake supports `Release`, `Debug`, and `None`).
+The build type can also be set on a per-configuration basis by setting `CAPP_BUILD_TYPE`
+in a `config.cmake` file.
+
+### config.cmake
+
+CApp supports multiple configurations, each one contained in a directory
+`configuration/<config_name>/`.
+This allows users to set variables that control the build, such as enabling or
+disabling options in certain packages.
+These options should be handled through CMake variables, and should the configuration
+should be defined in a file `configuration/<config_name>/config.cmake`.
+This configuration file will be loaded via a cmake `include()` command prior to
+including `app.cmake`.
+
+For example, if there is an option in package `foo` called `FOO_ENABLE_FAST`,
+and you'd like to control this at the overall application layer, you could put the following
+in the `config.cmake` file:
+
+```cmake
+set(MY_APP_ENABLE_FAST TRUE)
+```
+
+Then the file `packages/foo/package.cmake` could do the following:
+
+```cmake
+capp_package(
+  OPTIONS
+  "-DFOO_ENABLE_FAST=${MY_APP_ENABLE_FAST}"
+  )
+```
+
+If the `config.cmake` or `app.cmake` files are altered, the next time that CApp
+tries to build it will re-configure all packages.
+
+There are three ways the user can select which configuration CApp is operating on:
+ 1. The CApp command accepts an argument `--config=<config_name>`
+ 2. If the CApp command is executed somewhere inside the configuration directory,
+    it will infer the configuration based on the directory.
+ 3. Given no other information, CApp will use `default` as the name of the configuration.
 
 ### clone command
 
@@ -222,11 +234,11 @@ source/<package-name>
 Each package will have its CMake binary directory (where CMake is configured
 and all intermediate build files are stored) at:
 ```
-build/<package-name>
+configuration/<config_name>/build/<package-name>
 ```
 Each package will be installed by setting `CMAKE_INSTALL_PREFIX` equal to:
 ```
-install/<package-name>
+configuration/<config_name>/install/<package-name>
 ```
 
 The `capp init` command populates `.gitignore` to ignore these directories,
