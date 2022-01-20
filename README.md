@@ -220,7 +220,7 @@ With a copy of the build repository available, CApp can build it with the `capp 
 
 ```bash
 cd my-build
-capp.sh build
+capp.sh build --config myconfig
 ```
 
 ### Directory structure
@@ -262,7 +262,7 @@ This can be done with the `capp rebuild` command:
 cd my-build
 cd source/package1
 vim package_function.c
-capp.sh rebuild package1
+capp.sh rebuild --config myconfig package1
 ```
 
 If given no arguments, the `capp rebuild` command will rebuild all packages.
@@ -285,7 +285,7 @@ then all packages are tested.
 CApp will simply call `ctest` in the appropriate package build directory in order to test a package.
 
 ```bash
-capp.sh test package1
+capp.sh test --config myconfig package1
 ```
 
 ### Accepting a New Package Version
@@ -322,7 +322,7 @@ versions.
 cd my-build
 git pull
 capp.sh checkout
-capp.sh build
+capp.sh build --config myconfig
 ```
 
 Even easier, the `capp pull` command is equivalent to `git pull` followed by `capp checkout`:
@@ -330,7 +330,7 @@ Even easier, the `capp pull` command is equivalent to `git pull` followed by `ca
 ```bash
 cd my-build
 capp.sh pull
-capp.sh build
+capp.sh build --config myconfig
 ```
 
 At Sandia, CApp is SCR# 2639.0
