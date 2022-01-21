@@ -83,23 +83,23 @@ just the application package.
 By default, CApp will configure all packages with `-DCMAKE_BUILD_TYPE=RelWithDebInfo`.
 The `BUILD_TYPE` argument can be used to change the build type to something else
 (CMake supports `Release`, `Debug`, and `None`).
-The build type can also be set on a per-configuration basis by setting `CAPP_BUILD_TYPE`
-in a `config.cmake` file.
+The build type can also be set on a per-flavor basis by setting `CAPP_BUILD_TYPE`
+in a `flavor.cmake` file.
 
-### config.cmake
+### flavor.cmake
 
-CApp supports multiple configurations, each one contained in a directory
-`configuration/<config_name>/`.
+CApp supports multiple flavors, which are just full-build configurations by a different name.
+Each build flavor is contained in a directory `flavor/<flavor_name>/`.
 This allows users to set variables that control the build, such as enabling or
 disabling options in certain packages.
-These options should be handled through CMake variables, and should the configuration
-should be defined in a file `configuration/<config_name>/config.cmake`.
-This configuration file will be loaded via a cmake `include()` command prior to
+These options should be handled through CMake variables, and
+should be defined in a file `flavor/<flavor_name>/flavor.cmake`.
+This flavor file will be loaded via a cmake `include()` command prior to
 including `app.cmake`.
 
 For example, if there is an option in package `foo` called `FOO_ENABLE_FAST`,
 and you'd like to control this at the overall application layer, you could put the following
-in the `config.cmake` file:
+in the `flavor.cmake` file:
 
 ```cmake
 set(MY_APP_ENABLE_FAST TRUE)
@@ -114,14 +114,14 @@ capp_package(
   )
 ```
 
-If the `config.cmake` or `app.cmake` files are altered, the next time that CApp
+If the `flavor.cmake` or `app.cmake` files are altered, the next time that CApp
 tries to build it will re-configure all packages.
 
-There are three ways the user can select which configuration CApp is operating on:
- 1. The CApp command accepts an argument `--config=<config_name>`
- 2. If the CApp command is executed somewhere inside the configuration directory,
-    it will infer the configuration based on the directory.
- 3. Given no other information, CApp will use `default` as the name of the configuration.
+There are three ways the user can select which flavor CApp is operating on:
+ 1. The CApp command accepts an argument `--flavor <flavor_name>` or `-f <flavor_name>` for short
+ 2. If the CApp command is executed somewhere inside the flavor directory,
+    it will infer the flavor based on the directory.
+ 3. Given no other information, CApp will use `plain` as the name of the flavor.
 
 ### clone command
 
@@ -220,7 +220,7 @@ With a copy of the build repository available, CApp can build it with the `capp 
 
 ```bash
 cd my-build
-capp.sh build --config myconfig
+capp.sh build -f plain
 ```
 
 ### Directory structure
@@ -234,11 +234,11 @@ source/<package-name>
 Each package will have its CMake binary directory (where CMake is configured
 and all intermediate build files are stored) at:
 ```
-configuration/<config_name>/build/<package-name>
+flavor/<flavor_name>/build/<package-name>
 ```
 Each package will be installed by setting `CMAKE_INSTALL_PREFIX` equal to:
 ```
-configuration/<config_name>/install/<package-name>
+flavor/<flavor_name>/install/<package-name>
 ```
 
 The `capp init` command populates `.gitignore` to ignore these directories,
@@ -262,7 +262,7 @@ This can be done with the `capp rebuild` command:
 cd my-build
 cd source/package1
 vim package_function.c
-capp.sh rebuild --config myconfig package1
+capp.sh rebuild -f plain package1
 ```
 
 If given no arguments, the `capp rebuild` command will rebuild all packages.
@@ -285,7 +285,7 @@ then all packages are tested.
 CApp will simply call `ctest` in the appropriate package build directory in order to test a package.
 
 ```bash
-capp.sh test --config myconfig package1
+capp.sh test -f plain package1
 ```
 
 ### Accepting a New Package Version
@@ -322,7 +322,7 @@ versions.
 cd my-build
 git pull
 capp.sh checkout
-capp.sh build --config myconfig
+capp.sh build -f plain
 ```
 
 Even easier, the `capp pull` command is equivalent to `git pull` followed by `capp checkout`:
@@ -330,7 +330,7 @@ Even easier, the `capp pull` command is equivalent to `git pull` followed by `ca
 ```bash
 cd my-build
 capp.sh pull
-capp.sh build --config myconfig
+capp.sh build -f plain
 ```
 
 At Sandia, CApp is SCR# 2639.0
