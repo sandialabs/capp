@@ -117,11 +117,10 @@ capp_package(
 If the `flavor.cmake` or `app.cmake` files are altered, the next time that CApp
 tries to build it will re-configure all packages.
 
-There are three ways the user can select which flavor CApp is operating on:
+There are two ways the user can select which flavor CApp is operating on:
  1. The CApp command accepts an argument `--flavor <flavor_name>` or `-f <flavor_name>` for short
  2. If the CApp command is executed somewhere inside the flavor directory,
     it will infer the flavor based on the directory.
- 3. Given no other information, CApp will use `plain` as the name of the flavor.
 
 ### clone command
 
