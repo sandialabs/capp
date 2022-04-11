@@ -1274,12 +1274,14 @@ elseif(CAPP_COMMAND STREQUAL "commit")
     set(commit_list "${CAPP_PACKAGES}")
   endif()
   foreach (package IN LISTS commit_list)
-    capp_commit_command(
-      PACKAGE ${package}
-      RESULT_VARIABLE capp_command_result
-    )
-    if (NOT capp_command_result EQUAL 0)
-      break()
+    if (EXISTS "${CAPP_SOURCE_ROOT}/${package}")
+      capp_commit_command(
+        PACKAGE ${package}
+        RESULT_VARIABLE capp_command_result
+      )
+      if (NOT capp_command_result EQUAL 0)
+        break()
+      endif()
     endif()
   endforeach()
 elseif(CAPP_COMMAND STREQUAL "checkout")
