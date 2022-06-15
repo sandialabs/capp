@@ -1097,7 +1097,7 @@ function(capp_test_command)
     capp_execute(
       WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${package}"
       RESULT_VARIABLE package_test_result
-      COMMAND ctest ${capp_test_command_ARGUMENTS})
+      COMMAND ctest ${capp_test_command_ARGUMENTS} -C ${${package}_BUILD_TYPE})
     if (NOT package_test_result EQUAL 0)
       set(${capp_test_command_RESULT_VARIABLE} "${package_test_result}" PARENT_SCOPE)
       return()
