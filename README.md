@@ -80,7 +80,7 @@ that contains the source code for the application but not any of the
 other supporting packages.
 The typical use case will be to list the `ROOT_PACKAGES` as
 just the application package.
-By default, CApp will configure all packages with `-DCMAKE_BUILD_TYPE=RelWithDebInfo`.
+By default, CApp will configure all packages with `-DCMAKE_BUILD_TYPE=Release`.
 The `BUILD_TYPE` argument can be used to change the build type to something else
 (CMake supports `Release`, `Debug`, and `None`).
 The build type can also be set on a per-flavor basis by setting `CAPP_BUILD_TYPE`
@@ -193,7 +193,7 @@ of the `package` directory of the build repository.
 If the `BUILD_TYPE` option is present, it sets the value of
 `CMAKE_BUILD_TYPE` for just this package.
 Otherwise, the value of `BUILD_TYPE` given to `capp_app` is used.
-If neither are given, `RelWithDebInfo` is used.
+If neither are given, `Release` is used.
 
 If the `NO_CONFIGURE_CACHE` option is present, then when
 CApp tries to re-configure a package it will first
