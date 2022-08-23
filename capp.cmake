@@ -889,8 +889,11 @@ function(capp_clone_command)
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
     RESULT_VARIABLE git_clone_result
     ERROR_VARIABLE git_clone_error
+    OUTPUT_VARIABLE git_clone_output
   )
   if (NOT git_clone_result EQUAL 0)
+    capp_list_to_string(LIST capp_clone_command_GIT_ARGUMENTS STRING arg_string)
+    message("CApp: git clone ${arg_string} failed:\n${git_clone_output}\n${git_clone_error}")
     set(${capp_clone_command_RESULT_VARIABLE} ${git_clone_result} PARENT_SCOPE)
     return()
   endif()
