@@ -885,7 +885,7 @@ function(capp_clone_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_clone_command "" "RESULT_VARIABLE" "GIT_ARGUMENTS")
   make_directory("${CAPP_SOURCE_ROOT}")
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" clone ${capp_clone_command_GIT_ARGUMENTS}
+    COMMAND "${GIT_EXECUTABLE}" clone --recursive ${capp_clone_command_GIT_ARGUMENTS}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
     RESULT_VARIABLE git_clone_result
     ERROR_VARIABLE git_clone_error
