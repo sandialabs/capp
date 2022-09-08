@@ -1123,10 +1123,30 @@ function(capp_test_command)
   set(${capp_test_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
+function(capp_install_command)
+  cmake_parse_arguments(PARSE_ARGV 0 arg "" "RESULT_VARIABLE;PREFIX" "PACKAGES")
+  if (NOT arg_PREFIX)
+    message("CApp install was not given a prefix, please use --prefix /your/path")
+    set(${arg_RESULT_VARIABLE} -1 PARENT_SCOPE)
+    return()
+  endif()
+  foreach(package IN LISTS arg_PACKAGES)
+    capp_get_subdirectories(package_subdirs "${CAPP_INSTALL_ROOT}/${package}")
+    foreach(package_subdir IN LISTS package_subdirs)
+      message("CApp copying ${CAPP_INSTALL_ROOT}/${package}/${package_subdir} to ${arg_PREFIX}")
+      file(INSTALL "${CAPP_INSTALL_ROOT}/${package}/${package_subdir}"
+           DESTINATION "${arg_PREFIX}"
+           USE_SOURCE_PERMISSIONS)
+    endforeach()
+  endforeach()
+  set(${arg_RESULT_VARIABLE} 0 PARENT_SCOPE)
+endfunction()
+
 function(capp_separate_command_args)
-  cmake_parse_arguments(PARSE_ARGV 0 arg "" "PACKAGES_VARIABLE;BUILD_ARGUMENTS_VARIABLE;TEST_ARGUMENTS_VARIABLE" "INPUT_ARGUMENTS")
+  cmake_parse_arguments(PARSE_ARGV 0 arg "" "PACKAGES_VARIABLE;BUILD_ARGUMENTS_VARIABLE;TEST_ARGUMENTS_VARIABLE;INSTALL_ARGUMENTS_VARIABLE" "INPUT_ARGUMENTS")
   set(build_args)
   set(test_args)
+  set(install_args)
   set(packages)
   while (arg_INPUT_ARGUMENTS)
     list(POP_FRONT arg_INPUT_ARGUMENTS arg)
@@ -1149,6 +1169,9 @@ function(capp_separate_command_args)
     elseif (arg STREQUAL "-R")
       list(POP_FRONT arg_INPUT_ARGUMENTS regex)
       list(APPEND test_args -R "${regex}")
+    elseif (arg STREQUAL "--prefix")
+      list(POP_FRONT arg_INPUT_ARGUMENTS prefix)
+      list(APPEND install_args PREFIX "${prefix}")
     elseif (NOT package_index EQUAL -1)
       list(APPEND packages "${arg}")
     endif()
@@ -1164,6 +1187,9 @@ function(capp_separate_command_args)
   endif()
   if (arg_TEST_ARGUMENTS_VARIABLE)
     set(${arg_TEST_ARGUMENTS_VARIABLE} "${test_args}" PARENT_SCOPE)
+  endif()
+  if (arg_INSTALL_ARGUMENTS_VARIABLE)
+    set(${arg_INSTALL_ARGUMENTS_VARIABLE} "${install_args}" PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -1276,6 +1302,25 @@ elseif(CAPP_COMMAND STREQUAL "test")
   capp_test_command(
     ARGUMENTS ${test_args}
     PACKAGES ${test_list}
+    RESULT_VARIABLE capp_command_result)
+elseif(CAPP_COMMAND STREQUAL "install")
+  capp_find_root()
+  capp_setup_flavor()
+  capp_read_package_files_by_dependency()
+  capp_topsort_packages()
+  capp_separate_command_args(
+    INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+    PACKAGES_VARIABLE package_list
+    BUILD_ARGUMENTS_VARIABLE build_args
+    INSTALL_ARGUMENTS_VARIABLE install_args)
+  capp_initialize_needs()
+  capp_fulfill_needs(
+    RESULT_VARIABLE capp_command_result
+    BUILD_ARGUMENTS ${build_args}
+  )
+  capp_install_command(
+    PACKAGES ${package_list}
+    ${install_args}
     RESULT_VARIABLE capp_command_result)
 elseif(CAPP_COMMAND STREQUAL "commit")
   capp_find_root()

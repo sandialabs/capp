@@ -21,7 +21,7 @@ Slides describing CApp and modern CMake usage can be found [here](https://figsha
 
 # Usage
 
-## Installing
+## Installing CApp
 
 CApp consists of a CMake script and two drivers: a Bash driver for Linux or Mac and
 a Batch driver for Windows.
@@ -211,7 +211,7 @@ For those packages, one can add `IGNORE_UNCOMMITTED` to the
 `capp_package` arguments to tell CApp to ignore uncommitted changes
 to that package.
 
-## Installing an Application
+## Building an Application
 
 ### build command
 
@@ -243,6 +243,19 @@ flavor/<flavor_name>/install/<package-name>
 The `capp init` command populates `.gitignore` to ignore these directories,
 since their content is an artifact of the current build and not part of the
 fundamental specification of a build repository.
+
+## Installing an Application
+
+CApp has an install command which will copy files from its internal installation
+directories to a directory that must be specified via the `--prefix` flag.
+Because it copies the files, this could be problematic for dynamically linked
+packages using RPATH, and is only advised for statically linked packages.
+Like other commands, the install command accepts a list of packages and will
+install all packages if not given any.
+
+```bash
+./capp.sh install my_root_package -f plain --prefix /usr
+```
 
 ## Developing an Application
 
