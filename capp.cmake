@@ -162,7 +162,7 @@ function(capp_checkout)
     return()
   endif()
   if (current_commit STREQUAL desired_commit)
-    message("debug: ${package} is already at the desired commit")
+    message("CApp: ${package} is already at the desired commit")
   else()
     #From here on out we will be trying to change the commit that a package
     #is checked out to, so we will mark it as needing re-configuration
@@ -185,7 +185,7 @@ function(capp_checkout)
     #thus converting a one-line-per-remote string into a CMake list
     string(REGEX REPLACE "[\r\n]+" ";" existing_remotes "${remote_show_output}")
     list(REMOVE_ITEM existing_remotes "")
-    message("debug: in ${package}, existing_remotes=${existing_remotes}")
+    message("CApp: in ${package}, existing_remotes=${existing_remotes}")
     #Then we check if any of these remotes match the desired URL:
     foreach(existing_remote IN LISTS existing_remotes)
       capp_get_remote_url(
@@ -198,9 +198,9 @@ function(capp_checkout)
         set(${capp_checkout_RESULT_VARIABLE} ${remote_url_result} PARENT_SCOPE)
         return()
       endif()
-      message("debug: ${package} remote ${existing_remote} has URL ${existing_remote_url}")
+      message("CApp: ${package} remote ${existing_remote} has URL ${existing_remote_url}")
       if (existing_remote_url STREQUAL desired_git_url)
-        message("debug: ${package} remote ${existing_remote} matches desired URL ${desired_git_url}")
+        message("CApp: ${package} remote ${existing_remote} matches desired URL ${desired_git_url}")
         set(remote ${existing_remote})
       endif()
     endforeach()
@@ -215,7 +215,7 @@ function(capp_checkout)
         "\\2"
         reasonable_remote_name
         "${desired_git_url}")
-      message("debug: a reasonable name for the remote for ${desired_git_url} is ${reasonable_remote_name}")
+      message("CApp: a reasonable name for the remote for ${desired_git_url} is ${reasonable_remote_name}")
       if (reasonable_remote_name IN_LIST existing_remotes)
         #If this reasonable name is already one of the remotes, let's just give up.
         #It is best for the user to decide how to resolve this mess.
@@ -233,7 +233,7 @@ function(capp_checkout)
         set(${capp_checkout_RESULT_VARIABLE} ${remote_add_result} PARENT_SCOPE)
         return()
       endif()
-      message("debug: added remote ${reasonable_remote_name} with URL ${desired_git_url} to ${package}")
+      message("CApp: added remote ${reasonable_remote_name} with URL ${desired_git_url} to ${package}")
       set(remote ${reasonable_remote_name})
     endif()
     #If we are here, then the repository is not at the desired commit.
@@ -251,10 +251,10 @@ function(capp_checkout)
       #If we are here, then the desired commit doesn't exist locally.
       #In that case, the next step
       #is to ensure the desired Git URL exists as a remote and has been fetched.
-      message("debug: ${package} desired commit ${desired_commit} doesn't exist locally")
+      message("CApp: ${package} desired commit ${desired_commit} doesn't exist locally")
       #If we are here, then ${remote} is a remote with the right Git URL.
       #Let's fetch it.
-      message("debug: fetching remote ${remote} of ${package}")
+      message("CApp: fetching remote ${remote} of ${package}")
       capp_execute(
         COMMAND "${GIT_EXECUTABLE}" fetch ${remote}
         WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
@@ -266,7 +266,7 @@ function(capp_checkout)
         set(${capp_checkout_RESULT_VARIABLE} ${fetch_result} PARENT_SCOPE)
         return()
       endif()
-      message("debug: succeeded in fetching remote ${remote} of ${package}")
+      message("CApp: succeeded in fetching remote ${remote} of ${package}")
       #Then let's check if the given commit exists now.
       capp_execute(
         COMMAND "${GIT_EXECUTABLE}" cat-file -e ${desired_commit}^{commit}
@@ -303,7 +303,7 @@ function(capp_checkout)
     string(REGEX MATCHALL "refs/remotes/${remote}/[^ \t\r\n]+" pointing_refs "${pointing_refs_output}")
     #One of these refs can be HEAD, which is special and not a branch name
     list(REMOVE_ITEM pointing_refs "refs/remotes/${remote}/HEAD")
-    message("debug: in ${package}, pointing_refs=${pointing_refs}")
+    message("CApp: in ${package}, pointing_refs=${pointing_refs}")
     if (pointing_refs)
       #At this point, there are some remote refs that point to the desired commit.
       #Let's try to pick one of those as the branch to check out.
@@ -317,7 +317,7 @@ function(capp_checkout)
         list(GET pointing_refs 0 pointing_ref)
         string(REGEX REPLACE "${CAPP_REMOTE_REF_REGEX}" "\\2" branch "${pointing_ref}")
       endif()
-      message("debug: in ${package}, picked branch ${branch}")
+      message("CApp: in ${package}, picked branch ${branch}")
       #Okay, we finally have a remote and a branch that we want to check out.
       #Let's do it!
       capp_execute(
@@ -331,7 +331,7 @@ function(capp_checkout)
         set(${capp_checkout_RESULT_VARIABLE} ${branch_checkout_result} PARENT_SCOPE)
         return()
       endif()
-      message("debug: in ${package}, checked out ${branch}, tracking ${remote}/${branch}")
+      message("CApp: in ${package}, checked out ${branch}, tracking ${remote}/${branch}")
     else()
       #If there are no remote refs that point to this commit, then it is a
       #"detached HEAD" situation and we can just check out the desired commit.
@@ -346,7 +346,7 @@ function(capp_checkout)
         set(${capp_checkout_RESULT_VARIABLE} ${detached_checkout_result} PARENT_SCOPE)
         return()
       endif()
-      message("debug: checked out commit ${desired_commit} explicitly")
+      message("CApp: checked out commit ${desired_commit} explicitly")
     endif()
   endif()
   #Aaaand by now we've succeeded in "git checkout"'ing a good thing.
@@ -361,8 +361,8 @@ function(capp_checkout)
     set(${capp_checkout_RESULT_VARIABLE} "${submodule_result}" PARENT_SCOPE)
     return()
   endif()
-  message("debug: submodule update of ${package} completed")
-  message("debug: checkout of ${package} succeeded")
+  message("CApp: submodule update of ${package} completed")
+  message("CApp: checkout of ${package} succeeded")
   #We did it. We "checked out a commit".
   set(${capp_checkout_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
@@ -391,7 +391,7 @@ function(capp_clone)
     set(${capp_clone_RESULT_VARIABLE} "${checkout_result}" PARENT_SCOPE)
     return()
   endif()
-  message("debug: clone of ${capp_clone_PACKAGE} succeeded\n")
+  message("CApp: clone of ${capp_clone_PACKAGE} succeeded\n")
   set(${capp_clone_RESULT_VARIABLE} 0 PARENT_SCOPE)
   set(${capp_clone_PACKAGE}_IS_CLONED TRUE PARENT_SCOPE)
 endfunction()
@@ -984,7 +984,7 @@ function(capp_commit_command)
     OUTPUT_STRIP_TRAILING_WHITESPACE)
   if (upstream_ref_result EQUAL 0)
     #If we are here then there is a clear upstream ref.
-    message("debug: for ${capp_commit_command_PACKAGE}, there is a clear upstream ref ${upstream_ref}")
+    message("CApp: for ${capp_commit_command_PACKAGE}, there is a clear upstream ref ${upstream_ref}")
     string(REGEX REPLACE "${CAPP_REMOTE_REF_REGEX}" "\\1" remote "${upstream_ref}")
     string(REGEX REPLACE "${CAPP_REMOTE_REF_REGEX}" "\\2" branch "${upstream_ref}")
     #Now, it's still important that we check whether the current commit has been pushed
@@ -998,7 +998,7 @@ function(capp_commit_command)
       set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
       return()
     endif()
-    message("debug: branch ${branch} on remote ${remote} contains commit ${new_commit}")
+    message("CApp: branch ${branch} on remote ${remote} contains commit ${new_commit}")
   endif()
   if (NOT remote)
     #Now comes the harder case... we are checking out a "detached HEAD" commit
@@ -1036,7 +1036,7 @@ function(capp_commit_command)
       list(APPEND containing_remotes ${containing_remote})
     endforeach()
     list(REMOVE_DUPLICATES containing_remotes)
-    message("debug: for ${capp_commit_command_PACKAGE}, containing_remotes=${containing_remotes}")
+    message("CApp: for ${capp_commit_command_PACKAGE}, containing_remotes=${containing_remotes}")
     #Now we need to pick one of those remotes as the official URL.
     #all we know is origin is special, of if origin contains it then
     #let's pick that one.
@@ -1047,7 +1047,7 @@ function(capp_commit_command)
       list(GET containing_remotes 0 remote)
     endif()
   endif()
-  message("debug: chose remote ${remote} to commit ${capp_commit_command_PACKAGE}")
+  message("CApp: chose remote ${remote} to commit ${capp_commit_command_PACKAGE}")
   capp_get_remote_url(
     PACKAGE ${capp_commit_command_PACKAGE}
     REMOTE ${remote}
