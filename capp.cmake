@@ -151,7 +151,7 @@ function(capp_checkout)
   endif()
   #The common case is that the repository is already
   #at this commit. In that case, just exit early.
-  capp_get_commit(
+  capp_get_package_commit(
     PACKAGE ${package}
     COMMIT_VARIABLE current_commit
     RESULT_VARIABLE get_commit_result
@@ -572,7 +572,7 @@ macro(capp_find_root)
   while (CAPP_TRUE)
     get_filename_component(CAPP_ROOT_PARENT "${CAPP_ROOT}" DIRECTORY)
     if (CAPP_ROOT_PARENT STREQUAL CAPP_ROOT)
-      message(FATAL_ERROR "Could not find app.cmake in ${CMAKE_CURRENT_SOURCE_DIR} or any parent directories: Run capp init first")
+      message(FATAL_ERROR "CApp could not find app.cmake in ${CMAKE_CURRENT_SOURCE_DIR} or any parent directories: Run capp init first")
     endif()
     if (EXISTS "${CAPP_ROOT}/app.cmake")
       break()
@@ -581,6 +581,13 @@ macro(capp_find_root)
   endwhile()
   set(CAPP_SOURCE_ROOT "${CAPP_ROOT}/source")
   set(CAPP_PACKAGE_ROOT "${CAPP_ROOT}/package")
+  capp_get_commit(
+      GIT_REPO_PATH "${CAPP_ROOT}"
+      COMMIT_VARIABLE CAPP_COMMIT
+      RESULT_VARIABLE get_commit_result)
+  if (NOT get_commit_result EQUAL 0)
+    message(FATAL_ERROR "CApp could not query the commit of the build repository")
+  endif()
 endmacro()
 
 macro(capp_setup_flavor)
@@ -822,18 +829,28 @@ function(capp_write_package_file)
 endfunction()
 
 function(capp_get_commit)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_get_commit "" "PACKAGE;COMMIT_VARIABLE;RESULT_VARIABLE" "")
+  cmake_parse_arguments(PARSE_ARGV 0 arg "" "GIT_REPO_PATH;COMMIT_VARIABLE;RESULT_VARIABLE" "")
   capp_execute(
     COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
-    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${capp_get_commit_PACKAGE}"
+    WORKING_DIRECTORY "${arg_GIT_REPO_PATH}"
     RESULT_VARIABLE git_rev_parse_result
     OUTPUT_VARIABLE git_rev_parse_output
     )
-  set(${capp_get_commit_RESULT_VARIABLE} ${git_rev_parse_result} PARENT_SCOPE)
+  set(${arg_RESULT_VARIABLE} ${git_rev_parse_result} PARENT_SCOPE)
   if (git_rev_parse_result EQUAL 0)
     string(STRIP "${git_rev_parse_output}" git_commit)
-    set(${capp_get_commit_COMMIT_VARIABLE} ${git_commit} PARENT_SCOPE)
+    set(${arg_COMMIT_VARIABLE} ${git_commit} PARENT_SCOPE)
   endif()
+endfunction()
+
+function(capp_get_package_commit)
+  cmake_parse_arguments(PARSE_ARGV 0 arg "" "PACKAGE;COMMIT_VARIABLE;RESULT_VARIABLE" "")
+  capp_get_commit(
+      GIT_REPO_PATH "${CAPP_SOURCE_ROOT}/${arg_PACKAGE}"
+      COMMIT_VARIABLE commit
+      RESULT_VARIABLE result)
+  set(${arg_COMMIT_VARIABLE} ${commit} PARENT_SCOPE)
+  set(${arg_RESULT_VARIABLE} ${result} PARENT_SCOPE)
 endfunction()
 
 function(capp_get_remote_url)
@@ -925,7 +942,7 @@ function(capp_clone_command)
     set(${capp_clone_command_RESULT_VARIABLE} ${capp_get_remote_url_result} PARENT_SCOPE)
     return()
   endif()
-  capp_get_commit(
+  capp_get_package_commit(
     PACKAGE ${package}
     COMMIT_VARIABLE ${package}_COMMIT
     RESULT_VARIABLE capp_get_commit_result
@@ -958,7 +975,7 @@ function(capp_commit_command)
     set(${capp_commit_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
     return()
   endif()
-  capp_get_commit(
+  capp_get_package_commit(
     PACKAGE ${capp_commit_command_PACKAGE}
     COMMIT_VARIABLE new_commit
     RESULT_VARIABLE capp_get_commit_result
