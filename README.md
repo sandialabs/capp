@@ -345,4 +345,33 @@ capp.sh pull
 capp.sh build -f plain
 ```
 
+## Exporting Build Information
+
+CApp has a `capp export` command which produces a file `capp.json`
+describing the build in a way that can be used by other tools to
+automatically derive useful information.
+The `capp.json` file encodes a JSON array of JSON objects, one
+object per package.
+Each JSON package object has the following members:
+
+1. `name`: the package name
+1. `git`: the package's Git URL
+1. `commit`: the package's Git commit hash
+1. `submodules`: a JSON boolean which is `true` if the checked out
+   source has submodules
+1. `depedencies`: a JSON array of JSON strings which are the names
+   of upstream dependencies
+1. `options`: a JSON array of JSON strings which are the
+   command line options to be passed to the CMake configuration for
+   this package.
+
+Note that the description of the build is affected by options such
+as flavor.
+For best results, please specify a flavor when using `capp export`:
+
+```bash
+capp.sh export -f plain
+cat capp.json
+```
+
 At Sandia, CApp is SCR# 2639.0
