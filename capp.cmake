@@ -138,6 +138,7 @@ function(capp_checkout)
   set(package ${capp_checkout_PACKAGE})
   set(desired_commit ${${package}_COMMIT})
   set(desired_git_url ${${package}_GIT_URL})
+  set(has_submodules ${${package}_HAS_SUBMODULES})
   #Safety check: make sure there are not uncommitted changes, otherwise the
   #package can't really be checked out to the desired commit.
   capp_changes_committed(
@@ -349,19 +350,21 @@ function(capp_checkout)
       message("CApp: checked out commit ${desired_commit} explicitly")
     endif()
   endif()
-  #Aaaand by now we've succeeded in "git checkout"'ing a good thing.
-  #But we're not done yet! Submodules!
-  capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive
-    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
-    RESULT_VARIABLE submodule_result
-    )
-  if (NOT submodule_result EQUAL 0)
-    message("git submodule update --init --recursive failed")
-    set(${capp_checkout_RESULT_VARIABLE} "${submodule_result}" PARENT_SCOPE)
-    return()
+  if(has_submodules)
+    #Aaaand by now we've succeeded in "git checkout"'ing a good thing.
+    #But we're not done yet! Submodules!
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" submodule update --init --recursive
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      RESULT_VARIABLE submodule_result
+      )
+    if (NOT submodule_result EQUAL 0)
+      message("git submodule update --init --recursive failed")
+      set(${capp_checkout_RESULT_VARIABLE} "${submodule_result}" PARENT_SCOPE)
+      return()
+    endif()
+    message("CApp: submodule update of ${package} completed")
   endif()
-  message("CApp: submodule update of ${package} completed")
   message("CApp: checkout of ${package} succeeded")
   #We did it. We "checked out a commit".
   set(${capp_checkout_RESULT_VARIABLE} 0 PARENT_SCOPE)
@@ -474,13 +477,14 @@ macro(capp_app)
 endmacro()
 
 function(capp_package)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_package "NO_CONFIGURE_CACHE;IGNORE_UNCOMMITTED" "GIT_URL;COMMIT;SUBDIRECTORY;BUILD_TYPE" "OPTIONS;DEPENDENCIES")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_package "NO_CONFIGURE_CACHE;IGNORE_UNCOMMITTED;HAS_SUBMODULES" "GIT_URL;COMMIT;SUBDIRECTORY;BUILD_TYPE" "OPTIONS;DEPENDENCIES")
   set(${CAPP_PACKAGE}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_DEPENDENCIES "${capp_package_DEPENDENCIES}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_NO_CONFIGURE_CACHE "${capp_package_NO_CONFIGURE_CACHE}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_IGNORE_UNCOMMITTED "${capp_package_IGNORE_UNCOMMITTED}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_HAS_SUBMODULES "${capp_package_HAS_SUBMODULES}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_SUBDIRECTORY "${capp_package_SUBDIRECTORY}" PARENT_SCOPE)
   if (capp_package_BUILD_TYPE)
     set(${CAPP_PACKAGE}_BUILD_TYPE "${capp_package_BUILD_TYPE}" PARENT_SCOPE)
@@ -559,6 +563,7 @@ function(capp_read_package_file)
   include("${capp_read_package_file_path}")
   set(${CAPP_PACKAGE}_NO_CONFIGURE_CACHE ${${CAPP_PACKAGE}_NO_CONFIGURE_CACHE} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_IGNORE_UNCOMMITTED ${${CAPP_PACKAGE}_IGNORE_UNCOMMITTED} PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_HAS_SUBMODULES ${${CAPP_PACKAGE}_HAS_SUBMODULES} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_GIT_URL ${${CAPP_PACKAGE}_GIT_URL} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_COMMIT ${${CAPP_PACKAGE}_COMMIT} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_OPTIONS "${${CAPP_PACKAGE}_OPTIONS}" PARENT_SCOPE)
@@ -1189,12 +1194,10 @@ function(capp_export_command)
     string(APPEND export_content "    \"name\" : \"${package}\",\n")
     string(APPEND export_content "    \"git\" : \"${${package}_GIT_URL}\",\n")
     string(APPEND export_content "    \"commit\" : \"${${package}_COMMIT}\",\n")
-    set(has_submodules "false")
-    if (NOT EXISTS "${CAPP_SOURCE_ROOT}/${package}")
-      message(FATAL_ERROR "CApp cannot determine whether ${package} has submodules because it has not been checked out. Please use `capp checkout`")
-    endif()
-    if (EXISTS "${CAPP_SOURCE_ROOT}/${package}/.gitmodules")
+    if (${package}_HAS_SUBMODULES)
       set(has_submodules "true")
+    else()
+      set(has_submodules "false")
     endif()
     string(APPEND export_content "    \"submodules\" : ${has_submodules},\n")
     string(APPEND export_content "    \"dependencies\" : [\n")
