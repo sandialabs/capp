@@ -158,8 +158,8 @@ function(capp_checkout)
     RESULT_VARIABLE get_commit_result
     )
   if (NOT get_commit_result EQUAL 0)
-    message("failed to get the current commit of ${package}")
-    set(${capp_checkout_RESULT_VARIABLE} "${get_commit_result}" PARENT_SCOPE)
+    message("CApp: failed to get the current commit of ${package}")
+    set(${capp_checkout_RESULT_VARIABLE} ${get_commit_result} PARENT_SCOPE)
     return()
   endif()
   if (current_commit STREQUAL desired_commit)
@@ -255,17 +255,44 @@ function(capp_checkout)
       message("CApp: ${package} desired commit ${desired_commit} doesn't exist locally")
       #If we are here, then ${remote} is a remote with the right Git URL.
       #Let's fetch it.
-      message("CApp: fetching remote ${remote} of ${package}")
+      set(shallow_failed FALSE)
+      message("CApp: shallow fetching refs of package ${package}")
       capp_execute(
-        COMMAND "${GIT_EXECUTABLE}" fetch ${remote}
+        COMMAND "${GIT_EXECUTABLE}" fetch --depth 1 ${remote}
         WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
         OUTPUT_QUIET
         ERROR_QUIET
-        RESULT_VARIABLE fetch_result)
-      if (NOT fetch_result EQUAL 0)
-        message("failed to fetch remote ${remote} of ${package}")
-        set(${capp_checkout_RESULT_VARIABLE} ${fetch_result} PARENT_SCOPE)
-        return()
+        RESULT_VARIABLE refs_fetch_result)
+      if (NOT refs_fetch_result EQUAL 0)
+        message("CApp: failed to shallow fetch refs of ${package}")
+        set(shallow_failed TRUE)
+      endif()
+      message("CApp: shallow fetching commit ${desired_commit} of ${package}")
+      capp_execute(
+        COMMAND "${GIT_EXECUTABLE}" fetch --depth 1 ${remote}
+                ${desired_commit}
+        WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+        OUTPUT_QUIET
+        ERROR_QUIET
+        RESULT_VARIABLE commit_fetch_result)
+      if (NOT commit_fetch_result EQUAL 0)
+        message("CApp: failed to shallow fetch commit ${desired_commit} of ${package}")
+        set(shallow_failed TRUE)
+      endif()
+      if (shallow_failed)
+        message("CApp: failed to shallow fetch ${package}")
+        message("CApp: fully fetching remote ${remote} of ${package}")
+        capp_execute(
+          COMMAND "${GIT_EXECUTABLE}" fetch ${remote}
+          WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+          OUTPUT_QUIET
+          ERROR_QUIET
+          RESULT_VARIABLE fetch_result)
+        if (NOT fetch_result EQUAL 0)
+          message("CApp: failed to fetch remote ${remote} of ${package}")
+          set(${capp_checkout_RESULT_VARIABLE} ${fetch_result} PARENT_SCOPE)
+          return()
+        endif()
       endif()
       message("CApp: succeeded in fetching remote ${remote} of ${package}")
       #Then let's check if the given commit exists now.
@@ -372,17 +399,20 @@ endfunction()
 
 function(capp_clone)
   cmake_parse_arguments(PARSE_ARGV 0 capp_clone "" "PACKAGE;RESULT_VARIABLE" "")
-  make_directory("${CAPP_SOURCE_ROOT}")
-  message("\nCApp is cloning ${capp_clone_PACKAGE} from ${${capp_clone_PACKAGE}_GIT_URL}\n")
+  message("\nCApp: shallow cloning ${capp_clone_PACKAGE} from ${${capp_clone_PACKAGE}_GIT_URL}\n")
+  file(MAKE_DIRECTORY "${CAPP_SOURCE_ROOT}")
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" clone ${${capp_clone_PACKAGE}_GIT_URL} ${capp_clone_PACKAGE}
+    COMMAND "${GIT_EXECUTABLE}" clone --depth 1
+            "${${capp_clone_PACKAGE}_GIT_URL}"
+            ${capp_clone_PACKAGE}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
     RESULT_VARIABLE git_clone_result
     OUTPUT_QUIET
     ERROR_QUIET
     )
   if (NOT git_clone_result EQUAL 0)
-    message("\nCApp clone of ${capp_clone_PACKAGE} from ${${capp_clone_PACKAGE}_GIT_URL} failed\n")
+    message("\nCApp: shallow clone of ${capp_clone_PACKAGE} failed\n")
+    file(REMOVE_RECURSE "${CAPP_SOURCE_ROOT}/${capp_clone_PACKAGE}")
     set(${capp_clone_RESULT_VARIABLE} "${git_clone_result}" PARENT_SCOPE)
     return()
   endif()
@@ -390,7 +420,7 @@ function(capp_clone)
     PACKAGE ${capp_clone_PACKAGE}
     RESULT_VARIABLE checkout_result)
   if (NOT checkout_result EQUAL 0)
-    message("\nCApp checkout of ${capp_clone_PACKAGE} failed\n")
+    message("\nCApp: checkout of ${capp_clone_PACKAGE} failed\n")
     set(${capp_clone_RESULT_VARIABLE} "${checkout_result}" PARENT_SCOPE)
     return()
   endif()
@@ -836,8 +866,10 @@ endfunction()
 function(capp_get_commit)
   cmake_parse_arguments(PARSE_ARGV 0 arg "" "GIT_REPO_PATH;COMMIT_VARIABLE;RESULT_VARIABLE" "")
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
+    COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD --
     WORKING_DIRECTORY "${arg_GIT_REPO_PATH}"
+    OUTPUT_QUIET
+    ERROR_QUIET
     RESULT_VARIABLE git_rev_parse_result
     OUTPUT_VARIABLE git_rev_parse_output
     )
@@ -919,9 +951,10 @@ endfunction()
 
 function(capp_clone_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_clone_command "" "RESULT_VARIABLE" "GIT_ARGUMENTS")
-  make_directory("${CAPP_SOURCE_ROOT}")
+  file(MAKE_DIRECTORY "${CAPP_SOURCE_ROOT}")
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" clone --recursive ${capp_clone_command_GIT_ARGUMENTS}
+    COMMAND "${GIT_EXECUTABLE}" clone --depth 1 --recursive
+            ${capp_clone_command_GIT_ARGUMENTS}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
     RESULT_VARIABLE git_clone_result
     ERROR_VARIABLE git_clone_error
@@ -929,7 +962,7 @@ function(capp_clone_command)
   )
   if (NOT git_clone_result EQUAL 0)
     capp_list_to_string(LIST capp_clone_command_GIT_ARGUMENTS STRING arg_string)
-    message("CApp: git clone ${arg_string} failed:\n${git_clone_output}\n${git_clone_error}")
+    message("CApp: git clone --depth 1 --recursive ${arg_string} failed:\n${git_clone_output}\n${git_clone_error}")
     set(${capp_clone_command_RESULT_VARIABLE} ${git_clone_result} PARENT_SCOPE)
     return()
   endif()
