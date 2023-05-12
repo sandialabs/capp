@@ -866,9 +866,8 @@ endfunction()
 function(capp_get_commit)
   cmake_parse_arguments(PARSE_ARGV 0 arg "" "GIT_REPO_PATH;COMMIT_VARIABLE;RESULT_VARIABLE" "")
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD --
+    COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
     WORKING_DIRECTORY "${arg_GIT_REPO_PATH}"
-    OUTPUT_QUIET
     ERROR_QUIET
     RESULT_VARIABLE git_rev_parse_result
     OUTPUT_VARIABLE git_rev_parse_output
