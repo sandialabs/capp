@@ -1017,6 +1017,11 @@ function(capp_commit_command)
     COMMIT_VARIABLE new_commit
     RESULT_VARIABLE capp_get_commit_result
   )
+  if (new_commit STREQUAL ${${capp_commit_command_PACKAGE}_COMMIT})
+    message("\nCApp: commit for ${capp_commit_command_PACKAGE} has not changed")
+    set(${capp_commit_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
+    return()
+  endif()
   if (NOT capp_get_commit_result EQUAL 0)
     message("CApp commit command could not get the current commit for ${capp_commit_command_PACKAGE}")
     set(${capp_commit_command_RESULT_VARIABLE} ${capp_get_commit_result} PARENT_SCOPE)
