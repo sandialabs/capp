@@ -937,8 +937,7 @@ function(capp_init_command)
     set(${capp_init_command_RESULT_VARIABLE} ${capp_add_file_result} PARENT_SCOPE)
     return()
   endif()
-  foreach(filename "capp.cmake" "capp.sh" "capp.bat")
-    file(COPY "${CMAKE_CURRENT_LIST_DIR}/${filename}" DESTINATION "${CAPP_ROOT}")
+  foreach(filename "capp.cmake" "capp-setup.sh")
     capp_add_file(
       FILE "${CAPP_ROOT}/${filename}"
       RESULT_VARIABLE capp_add_file_result

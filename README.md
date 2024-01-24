@@ -23,19 +23,15 @@ Slides describing CApp and modern CMake usage can be found [here](https://figsha
 
 ## Installing CApp
 
-CApp consists of a CMake script and two drivers: a Bash driver for Linux or Mac and
-a Batch driver for Windows.
-The drivers can be used from the cloned Git repository or the three files can be
-copied somewhere else (`capp.cmake` needs to be in the same directory as the driver).
+CApp consists of a CMake script and a Bash environment setup script.
+These files can be used from the cloned Git repository or the three files can be
+copied somewhere else (`capp.cmake` needs to be in the same directory as the setup script).
 
 ```bash
 git clone git@github.com:sandialabs/capp.git
 cd capp
-cp capp.cmake capp.sh capp.bat /where/you/want
+cp capp.cmake capp-setup.sh /where/you/want
 ```
-
-Most users will not need to do this because `capp init` will copy these files into
-the build repository, see the next section for more details.
 
 ## Setting Up an Application
 
@@ -48,11 +44,21 @@ As the name suggests, a build repository is also a Git repository, and `capp ini
 will call `git init`.
 
 ```bash
-mkdir my-build
+git clone git@github.com:sandialabs/capp.git
+cd capp
+cp capp/capp.cmake capp/capp-setup.sh my-build/
 cd my-build
-capp.sh init my-application
+. capp-setup.sh
+capp init my-application
 vim app.cmake
 git commit -a -m "initial application commit"
+```
+
+The setup script must be sourced prior to using CApp in any context
+
+```bash
+cd my-build
+. capp-setup.sh
 ```
 
 ### app.cmake
@@ -127,8 +133,7 @@ There are two ways the user can select which flavor CApp is operating on:
 The easiest way to add a new package to the build repository is via `capp clone`:
 
 ```bash
-cd my-build
-capp.sh clone git@github.com:Unidata/netcdf-c.git
+capp clone git@github.com:Unidata/netcdf-c.git
 vim package/netcdf-c/package.cmake 
 git commit -a -m "added netcdf package"
 ```
@@ -213,13 +218,19 @@ to that package.
 
 ## Building an Application
 
+Recall that the setup script must be sourced prior to using CApp:
+
+```bash
+cd my-build
+. capp-setup.sh
+```
+
 ### build command
 
 With a copy of the build repository available, CApp can build it with the `capp build` command.
 
 ```bash
-cd my-build
-capp.sh build -f plain
+capp build -f plain
 ```
 
 ### Directory structure
@@ -253,13 +264,29 @@ packages using RPATH, and is only advised for statically linked packages.
 Like other commands, the install command accepts a list of packages and will
 install all packages if not given any.
 
+Recall that the setup script must be sourced prior to using CApp:
+
 ```bash
-./capp.sh install my_root_package -f plain --prefix /usr
+cd my-build
+. capp-setup.sh
+```
+
+```bash
+capp install my_root_package -f plain --prefix /usr
 ```
 
 ## Developing an Application
 
-Another key use case of CApp is actual application development.
+Possibly the most productive use of CApp is actual application development.
+CApp was designed specifically for users to radidly conduct multi-package
+development.
+
+Recall that the setup script must be sourced prior to using CApp:
+
+```bash
+cd my-build
+. capp-setup.sh
+```
 
 ### Rebuilding a Package
 
@@ -271,10 +298,9 @@ users may want to rebuild a package and all downstream dependencies.
 This can be done with the `capp rebuild` command:
 
 ```bash
-cd my-build
 cd source/package1
 vim package_function.c
-capp.sh rebuild -f plain package1
+capp rebuild -f plain package1
 ```
 
 If given no arguments, the `capp rebuild` command will rebuild all packages.
@@ -297,7 +323,7 @@ then all packages are tested.
 CApp will simply call `ctest` in the appropriate package build directory in order to test a package.
 
 ```bash
-capp.sh test -f plain package1
+capp test -f plain package1
 ```
 
 ### Accepting a New Package Version
@@ -308,10 +334,9 @@ This is done by the `capp commit` command, which will update the git URL and git
 the build repository points to.
 
 ```bash
-cd my-build
 cd source/package1
 git pull
-capp.sh commit package1
+capp commit package1
 git commit -a -m "updated version of package1"
 ```
 
@@ -331,18 +356,16 @@ This is especially helpful to run after other developers have made changes to pa
 versions.
 
 ```bash
-cd my-build
 git pull
-capp.sh checkout
-capp.sh build -f plain
+capp checkout
+capp build -f plain
 ```
 
 Even easier, the `capp pull` command is equivalent to `git pull` followed by `capp checkout`:
 
 ```bash
-cd my-build
-capp.sh pull
-capp.sh build -f plain
+capp pull
+capp build -f plain
 ```
 
 ## Exporting Build Information
@@ -370,7 +393,7 @@ as flavor.
 For best results, please specify a flavor when using `capp export`:
 
 ```bash
-capp.sh export -f plain
+capp export -f plain
 cat capp.json
 ```
 
