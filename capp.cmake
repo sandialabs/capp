@@ -10,6 +10,10 @@ if (WIN32)
 endif()
 find_package(Git REQUIRED QUIET)
 
+function(capp_stdout msg)
+  execute_process(COMMAND "${CMAKE_COMMAND}" -E echo "${msg}")
+endfunction()
+
 function(capp_list_to_string)
   cmake_parse_arguments(PARSE_ARGV 0 capp_list_to_string "" "LIST;STRING" "")
   set(str)
@@ -1279,6 +1283,32 @@ function(capp_export_command)
   set(${arg_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
+function(capp_environment_command)
+  cmake_parse_arguments(PARSE_ARGV 0 arg "" "RESULT_VARIABLE;MODE" "PACKAGES")
+  string(REPLACE ":" ";" path "$ENV{PATH}")
+  foreach(package IN LISTS CAPP_PACKAGES)
+    if (${package} IN_LIST arg_PACKAGES)
+      set(package_path "${CAPP_INSTALL_ROOT}/${package}/bin")
+      if (EXISTS "${package_path}")
+        if (${arg_MODE} STREQUAL "load")
+          if (NOT "${package_path}" IN_LIST path)
+            list(APPEND path "${package_path}")
+          endif()
+        elseif (${arg_MODE} STREQUAL "unload")
+          list(REMOVE_ITEM path "${package_path}")
+        elseif (${arg_MODE} STREQUAL "lmod")
+          capp_stdout("append_path(\"PATH\", \"${package_path}\")")
+        endif()
+      endif()
+    endif()
+  endforeach()
+  string(REPLACE ";" ":" path "${path}")
+  if (arg_MODE MATCHES "load|unload")
+    capp_stdout("export PATH=\"${path}\"")
+  endif()
+  set(${arg_RESULT_VARIABLE} 0 PARENT_SCOPE)
+endfunction()
+
 function(capp_separate_command_args)
   cmake_parse_arguments(PARSE_ARGV 0 arg "" "PACKAGES_VARIABLE;BUILD_ARGUMENTS_VARIABLE;TEST_ARGUMENTS_VARIABLE;INSTALL_ARGUMENTS_VARIABLE" "INPUT_ARGUMENTS")
   set(build_args)
@@ -1518,6 +1548,19 @@ elseif(CAPP_COMMAND STREQUAL "export")
   capp_export_command(
     RESULT_VARIABLE capp_command_result
     PACKAGES ${checkout_list}
+  )
+elseif(CAPP_COMMAND MATCHES "load|unload|lmod")
+  capp_find_root()
+  capp_setup_flavor()
+  capp_read_package_files_by_dependency()
+  capp_topsort_packages()
+  capp_separate_command_args(
+    INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+    PACKAGES_VARIABLE packages)
+  capp_environment_command(
+    RESULT_VARIABLE capp_command_result
+    PACKAGES ${packages}
+    MODE ${CAPP_COMMAND}
   )
 else()
   message(FATAL_ERROR "Unknown command ${CAPP_COMMAND}!")
