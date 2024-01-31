@@ -9,6 +9,7 @@ if (WIN32)
   set(CMAKE_PROGRAM_PATH "C:/Program Files") #workaround a workaround for MSVC 2017 in FindGit.cmake
 endif()
 find_package(Git REQUIRED QUIET)
+find_package(Python COMPONENTS Interpreter QUIET)
 
 function(capp_stdout msg)
   execute_process(COMMAND "${CMAKE_COMMAND}" -E echo "${msg}")
@@ -18,7 +19,11 @@ function(capp_list_to_string)
   cmake_parse_arguments(PARSE_ARGV 0 capp_list_to_string "" "LIST;STRING" "")
   set(str)
   foreach(item IN LISTS "${capp_list_to_string_LIST}")
-    set(str "${str} ${item}")
+    if (str)
+      set(str "${str} ${item}")
+    else()
+      set(str "${item}")
+    endif()
   endforeach()
   set(${capp_list_to_string_STRING} "${str}" PARENT_SCOPE)
 endfunction()
@@ -82,6 +87,26 @@ function(capp_execute)
     set(${capp_execute_ERROR_VARIABLE} "${capp_execute_error}" PARENT_SCOPE)
   endif()
   set(${capp_execute_RESULT_VARIABLE} "${capp_execute_result}" PARENT_SCOPE)
+endfunction()
+
+function(capp_add_paths result var list)
+  string(REPLACE ":" ";" contents "$ENV{${var}}")
+  foreach(path IN LISTS list)
+    if (NOT "${path}" IN_LIST contents)
+      list(PREPEND contents "${path}")
+    endif()
+  endforeach()
+  string(REPLACE ";" ":" contents "${contents}")
+  set(${result} "${contents}" PARENT_SCOPE)
+endfunction()
+
+function(capp_remove_paths result var list)
+  string(REPLACE ":" ";" contents "$ENV{${var}}")
+  foreach(path IN LISTS list)
+    list(REMOVE_ITEM contents "${path}")
+  endforeach()
+  string(REPLACE ";" ":" contents "${contents}")
+  set(${result} "${contents}" PARENT_SCOPE)
 endfunction()
 
 function(capp_add_file)
@@ -433,32 +458,124 @@ function(capp_clone)
   set(${capp_clone_PACKAGE}_IS_CLONED TRUE PARENT_SCOPE)
 endfunction()
 
+function(capp_ensure_venv)
+  if (NOT EXISTS "${CAPP_VENV_ROOT}")
+    message("CApp: Python virtual environment at ${CAPP_VENV_ROOT} is needed but doesn't exist")
+    if (NOT Python_FOUND)
+      message(FATAL_ERROR "CApp: Cannot create Python virtual environment because Python was not found")
+    endif()
+    message("CApp: Creating new Python virtual environment at ${CAPP_VENV_ROOT} using ${Python_EXECUTABLE}")
+    set(proxy_flag)
+    if (CAPP_PROXY)
+      set(proxy_flag "--proxy" ${CAPP_PROXY})
+    endif()
+    set(cmd_list 
+        "${Python_EXECUTABLE}"
+        -m
+        venv
+        "${CAPP_VENV_ROOT}"
+       )
+    capp_execute(
+        COMMAND ${cmd_list}
+        RESULT_VARIABLE venv_result
+        )
+    if (NOT venv_result EQUAL 0)
+      capp_list_to_string(LIST cmd_list STRING cmd_string)
+      file(REMOVE_RECURSE "${CAPP_VENV_ROOT}")
+      message(FATAL_ERROR "CApp: Failed to create Python virtual environment.\ncommand: ${cmd_string}\n")
+    else()
+      message("CApp: Successfully created Python virtual environment at ${CAPP_VENV_ROOT}")
+    endif()
+    set(cmd_list 
+        "${CAPP_VENV_ROOT}/bin/pip"
+        install
+        ${proxy_flag}
+        --upgrade
+        wheel
+        setuptools
+        pip
+       )
+    capp_list_to_string(LIST cmd_list STRING cmd_string)
+    capp_execute(
+        COMMAND ${cmd_list}
+        RESULT_VARIABLE pip_result
+        )
+    if (NOT ${pip_result} EQUAL 0)
+      file(REMOVE_RECURSE "${CAPP_VENV_ROOT}")
+      message(FATAL_ERROR "CApp: Failed to upgrade wheel, setuptools, and pip in Python virtual environment.\nThis can be due to proxy issues, try passing the --proxy flag to CApp.\ncommand: ${cmd_string}\n")
+      return()
+    else()
+      message("CApp: Successfully upgraded wheel, setuptools, and pip in Python virtual environment")
+    endif()
+  endif()
+endfunction()
+
 function(capp_configure)
   cmake_parse_arguments(PARSE_ARGV 0 capp_configure "" "PACKAGE;RESULT_VARIABLE" "")
-  make_directory("${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}")
-  set(options "-DCMAKE_INSTALL_PREFIX=${CAPP_INSTALL_ROOT}/${capp_configure_PACKAGE}")
-  if (NOT WIN32)
-    list(APPEND options "-DCMAKE_BUILD_TYPE=${${capp_configure_PACKAGE}_BUILD_TYPE}")
+  set(proxy_flag)
+  if (CAPP_PROXY)
+    set(proxy_flag "--proxy" ${CAPP_PROXY})
   endif()
-  list(APPEND options ${${capp_configure_PACKAGE}_OPTIONS})
+  if (${capp_configure_PACKAGE}_PYTHON_DEPENDENCIES)
+    capp_ensure_venv()
+    capp_list_to_string(LIST ${capp_configure_PACKAGE}_PYTHON_DEPENDENCIES STRING depstring)
+    message("CApp: Installing Python dependencies ${depstring} of ${capp_configure_PACKAGE} using pip")
+    set(cmd_list
+        "${CAPP_VENV_ROOT}/bin/pip"
+        install
+        --no-build-isolation
+        ${proxy_flag}
+        ${${capp_configure_PACKAGE}_PYTHON_DEPENDENCIES}
+       )
+    capp_list_to_string(LIST cmd_list STRING cmd_string)
+    capp_execute(
+        COMMAND ${cmd_list}
+        RESULT_VARIABLE pip_result
+        )
+    if (NOT ${pip_result} EQUAL 0)
+      set(${capp_configure_RESULT_VARIABLE} ${pip_result} PARENT_SCOPE)
+      message("CApp: failed to install Python dependencies of ${capp_configure_PACKAGE}\ncommand: ${cmd_string}\n")
+      return()
+    else()
+      message("CApp: successfully installed Python dependencies ${depstring} of ${capp_configure_PACKAGE}") 
+    endif()
+  endif()
+  file(MAKE_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}")
   set(source_directory "${CAPP_SOURCE_ROOT}/${capp_configure_PACKAGE}")
   if (${capp_configure_PACKAGE}_SUBDIRECTORY)
     set(source_directory "${source_directory}/${${capp_configure_PACKAGE}_SUBDIRECTORY}")
   endif()
-  capp_list_to_string(LIST options STRING print_options)
-  message("\nCApp configuring ${capp_configure_PACKAGE} with these options: ${print_options}\n")
-  capp_execute(
-      COMMAND
-      "${CMAKE_COMMAND}"
-      "${source_directory}"
-      ${options}
-      WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}"
-      RESULT_VARIABLE cmake_configure_result
-  )
-  set(${capp_configure_RESULT_VARIABLE} "${cmake_configure_result}" PARENT_SCOPE)
-  if (cmake_configure_result EQUAL 0)
+  set(cmakelists_path "${source_directory}/CMakeLists.txt")
+  set(setup_path "${source_directory}/setup.py")
+  set(pyproject_path "${source_directory}/pyproject.toml")
+  if (EXISTS "${cmakelists_path}")
+    set(options "-DCMAKE_INSTALL_PREFIX=${CAPP_INSTALL_ROOT}/${capp_configure_PACKAGE}")
+    if (NOT WIN32)
+      list(APPEND options "-DCMAKE_BUILD_TYPE=${${capp_configure_PACKAGE}_BUILD_TYPE}")
+    endif()
+    list(APPEND options ${${capp_configure_PACKAGE}_OPTIONS})
+    capp_list_to_string(LIST options STRING print_options)
+    message("\nCApp configuring ${capp_configure_PACKAGE} with these options: ${print_options}\n")
+    capp_execute(
+        COMMAND
+        "${CMAKE_COMMAND}"
+        "${source_directory}"
+        ${options}
+        WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}"
+        RESULT_VARIABLE cmake_configure_result
+    )
+    set(${capp_configure_RESULT_VARIABLE} "${cmake_configure_result}" PARENT_SCOPE)
+    if (cmake_configure_result EQUAL 0)
+      set(${capp_configure_PACKAGE}_IS_CONFIGURED TRUE PARENT_SCOPE)
+      file(WRITE "${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}/capp_configured.txt" "Yes")
+    endif()
+  elseif(EXISTS "${setup_path}" OR EXISTS "${pyproject_path}")
+    set(${capp_configure_RESULT_VARIABLE} 0 PARENT_SCOPE)
     set(${capp_configure_PACKAGE}_IS_CONFIGURED TRUE PARENT_SCOPE)
     file(WRITE "${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}/capp_configured.txt" "Yes")
+  else()
+    set(${capp_configure_RESULT_VARIABLE} -1 PARENT_SCOPE)
+    message("\nCApp: none of the following exist:\n${cmakelists_path}\n${setup_path}\n${pyproject_path}\n")
   endif()
 endfunction()
 
@@ -467,37 +584,81 @@ function(capp_build)
   set(with_args "")
   if (capp_build_ARGUMENTS)
     capp_list_to_string(LIST capp_build_ARGUMENTS STRING print_args)
-    set(with_args " with extra arguments${print_args}")
+    set(with_args " with extra arguments ${print_args}")
   endif()
   message("\nCApp building ${capp_build_PACKAGE}${with_args}\n")
-  capp_execute(
-      COMMAND
-      "${CMAKE_COMMAND}"
-      "--build"
-      "."
-      "--config"
-      ${${capp_build_PACKAGE}_BUILD_TYPE}
-      ${capp_build_ARGUMENTS}
-      WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_build_PACKAGE}"
-      RESULT_VARIABLE cmake_build_result
-  )
-  set(${capp_build_RESULT_VARIABLE} "${cmake_build_result}" PARENT_SCOPE)
+  set(source_directory "${CAPP_SOURCE_ROOT}/${capp_build_PACKAGE}")
+  if (${capp_build_PACKAGE}_SUBDIRECTORY)
+    set(source_directory "${source_directory}/${${capp_build_PACKAGE}_SUBDIRECTORY}")
+  endif()
+  set(cmakelists_path "${source_directory}/CMakeLists.txt")
+  if (EXISTS "${cmakelists_path}")
+    capp_execute(
+        COMMAND
+        "${CMAKE_COMMAND}"
+        "--build"
+        "."
+        "--config"
+        ${${capp_build_PACKAGE}_BUILD_TYPE}
+        ${capp_build_ARGUMENTS}
+        WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_build_PACKAGE}"
+        RESULT_VARIABLE cmake_build_result
+    )
+    set(${capp_build_RESULT_VARIABLE} "${cmake_build_result}" PARENT_SCOPE)
+  else()
+    set(${capp_build_RESULT_VARIABLE} 0 PARENT_SCOPE)
+  endif()
 endfunction()
 
 function(capp_install)
   cmake_parse_arguments(PARSE_ARGV 0 capp_install "" "PACKAGE;RESULT_VARIABLE" "")
   message("\nCApp installing ${capp_install_PACKAGE}\n")
-  capp_execute(
-      COMMAND
-      "${CMAKE_COMMAND}"
-      "--install"
-      "."
-      "--config"
-      ${${capp_install_PACKAGE}_BUILD_TYPE}
-      WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_install_PACKAGE}"
-      RESULT_VARIABLE cmake_install_result
-  )
-  set(${capp_install_RESULT_VARIABLE} "${cmake_install_result}" PARENT_SCOPE)
+  set(source_directory "${CAPP_SOURCE_ROOT}/${capp_install_PACKAGE}")
+  if (${capp_install_PACKAGE}_SUBDIRECTORY)
+    set(source_directory "${source_directory}/${${capp_install_PACKAGE}_SUBDIRECTORY}")
+  endif()
+  set(cmakelists_path "${source_directory}/CMakeLists.txt")
+  set(setup_path "${source_directory}/setup.py")
+  set(pyproject_path "${source_directory}/pyproject.toml")
+  if (EXISTS "${cmakelists_path}")
+    capp_execute(
+        COMMAND
+        "${CMAKE_COMMAND}"
+        "--install"
+        "."
+        "--config"
+        ${${capp_install_PACKAGE}_BUILD_TYPE}
+        WORKING_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_install_PACKAGE}"
+        RESULT_VARIABLE cmake_install_result
+    )
+    set(${capp_install_RESULT_VARIABLE} "${cmake_install_result}" PARENT_SCOPE)
+  elseif(EXISTS "${setup_path}" OR EXISTS "${pyproject_path}")
+    capp_ensure_venv()
+    set(proxy_flag)
+    if (CAPP_PROXY)
+      set(proxy_flag "--proxy" ${CAPP_PROXY})
+    endif()
+    message("CApp: Installing ${capp_install_PACKAGE} using pip")
+    set(cmd_list
+        "${CAPP_VENV_ROOT}/bin/pip"
+        install
+        --no-build-isolation
+        ${proxy_flag}
+        "${source_directory}"
+       )
+    capp_list_to_string(LIST cmd_list STRING cmd_string)
+    capp_execute(
+        COMMAND ${cmd_list}
+        RESULT_VARIABLE pip_result
+        )
+    set(${capp_install_RESULT_VARIABLE} ${pip_result} PARENT_SCOPE)
+    if (NOT pip_result EQUAL 0)
+      message("CApp: failed to install ${capp_install_PACKAGE} with pip\ncommand: ${cmd_string}\n")
+    endif()
+  else()
+    set(${capp_install_RESULT_VARIABLE} -1 PARENT_SCOPE)
+    message("CApp: none of the following exist:\n${cmakelists_path}\n${setup_path}")
+  endif()
 endfunction()
 
 macro(capp_app)
@@ -513,11 +674,13 @@ macro(capp_app)
 endmacro()
 
 function(capp_package)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_package "NO_CONFIGURE_CACHE;IGNORE_UNCOMMITTED;HAS_SUBMODULES" "GIT_URL;COMMIT;SUBDIRECTORY;BUILD_TYPE" "OPTIONS;DEPENDENCIES")
+  cmake_parse_arguments(PARSE_ARGV 0 capp_package "NO_CONFIGURE_CACHE;IGNORE_UNCOMMITTED;HAS_SUBMODULES" "GIT_URL;COMMIT;SUBDIRECTORY;BUILD_TYPE" "OPTIONS;DEPENDENCIES;PYTHON_DEPENDENCIES;PYTHONPATH")
   set(${CAPP_PACKAGE}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_DEPENDENCIES "${capp_package_DEPENDENCIES}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_PYTHON_DEPENDENCIES "${capp_package_PYTHON_DEPENDENCIES}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_PYTHONPATH "${capp_package_PYTHONPATH}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_NO_CONFIGURE_CACHE "${capp_package_NO_CONFIGURE_CACHE}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_IGNORE_UNCOMMITTED "${capp_package_IGNORE_UNCOMMITTED}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_HAS_SUBMODULES "${capp_package_HAS_SUBMODULES}" PARENT_SCOPE)
@@ -579,6 +742,7 @@ function(capp_build_install)
   )
   if (NOT capp_build_result EQUAL 0)
     set(${capp_build_install_RESULT_VARIABLE} ${capp_build_result} PARENT_SCOPE)
+    message("CApp: capp_build_install failed because capp_build failed")
     return()
   endif()
   capp_install(
@@ -589,6 +753,8 @@ function(capp_build_install)
   if (capp_install_result EQUAL 0)
     set(${capp_build_install_PACKAGE}_IS_INSTALLED TRUE PARENT_SCOPE)
     file(WRITE "${CAPP_INSTALL_ROOT}/${capp_build_install_PACKAGE}/capp_installed.txt" "Yes")
+  else()
+    message("CApp: capp_build_install failed because capp_install failed")
   endif()
 endfunction()
 
@@ -604,6 +770,8 @@ function(capp_read_package_file)
   set(${CAPP_PACKAGE}_COMMIT ${${CAPP_PACKAGE}_COMMIT} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_OPTIONS "${${CAPP_PACKAGE}_OPTIONS}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_DEPENDENCIES "${${CAPP_PACKAGE}_DEPENDENCIES}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_PYTHON_DEPENDENCIES "${${CAPP_PACKAGE}_PYTHON_DEPENDENCIES}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_PYTHONPATH "${${CAPP_PACKAGE}_PYTHONPATH}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_SUBDIRECTORY "${${CAPP_PACKAGE}_SUBDIRECTORY}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_BUILD_TYPE "${${CAPP_PACKAGE}_BUILD_TYPE}" PARENT_SCOPE)
   set(CAPP_PACKAGES ${CAPP_PACKAGES} ${CAPP_PACKAGE} PARENT_SCOPE)
@@ -644,6 +812,7 @@ macro(capp_setup_flavor)
     set(CAPP_FLAVOR_ROOT "${CAPP_ROOT}/flavor/${CAPP_FLAVOR}")
     set(CAPP_BUILD_ROOT "${CAPP_FLAVOR_ROOT}/build")
     set(CAPP_INSTALL_ROOT "${CAPP_FLAVOR_ROOT}/install")
+    set(CAPP_VENV_ROOT "${CAPP_FLAVOR_ROOT}/venv")
     set(flavor_file "${CAPP_FLAVOR_ROOT}/flavor.cmake")
     if (NOT EXISTS "${flavor_file}")
       message(FATAL_ERROR "Flavor file ${flavor_file} doesn't exist. It should define any CMake variables needed to setup this flavor of the overall build. If you have no such variables, creating an empty file will suffice.")
@@ -860,9 +1029,10 @@ function(capp_write_package_file)
   set(file_contents "${file_contents}  COMMIT ${${capp_write_package_file_PACKAGE}_COMMIT}\n")
   set(file_contents "${file_contents}  OPTIONS ${${capp_write_package_file_PACKAGE}_OPTIONS}\n")
   set(file_contents "${file_contents}  DEPENDENCIES ${${capp_write_package_file_PACKAGE}_DEPENDENCIES}\n")
+  set(file_contents "${file_contents}  PYTHON_DEPENDENCIES ${${capp_write_package_file_PACKAGE}_PYTHON_DEPENDENCIES}\n")
   set(file_contents "${file_contents})\n")
   set(full_directory "${CAPP_PACKAGE_ROOT}/${capp_write_package_file_PACKAGE}")
-  make_directory("${full_directory}")
+  file(MAKE_DIRECTORY "${full_directory}")
   file(WRITE "${full_directory}/package.cmake" "${file_contents}")
 endfunction()
 
@@ -928,7 +1098,7 @@ function(capp_init_command)
     set(${capp_init_command_RESULT_VARIABLE} ${capp_add_file_result} PARENT_SCOPE)
     return()
   endif()
-  file(WRITE "${CAPP_ROOT}/.gitignore" "source\nflavor/*/build\nflavor/*/install")
+  file(WRITE "${CAPP_ROOT}/.gitignore" "source\nflavor/*/build\nflavor/*/install\nflavor/*/venv")
   capp_add_file(
     FILE "${CAPP_ROOT}/.gitignore"
     RESULT_VARIABLE capp_add_file_result
@@ -1283,27 +1453,42 @@ function(capp_export_command)
 endfunction()
 
 function(capp_environment_command)
-  cmake_parse_arguments(PARSE_ARGV 0 arg "" "RESULT_VARIABLE;MODE" "PACKAGES")
-  string(REPLACE ":" ";" path "$ENV{PATH}")
+  cmake_parse_arguments(PARSE_ARGV 0 arg "" "RESULT_VARIABLE;MODE" "")
+  set(path "")
+  set(pythonpath "")
+  set(venv_path "${CAPP_VENV_ROOT}/bin")
+  if (EXISTS "${venv_path}")
+    list(APPEND path "${venv_path}")
+  endif()
   foreach(package IN LISTS CAPP_PACKAGES)
-    if (${package} IN_LIST arg_PACKAGES)
-      set(package_path "${CAPP_INSTALL_ROOT}/${package}/bin")
-      if (EXISTS "${package_path}")
-        if (${arg_MODE} STREQUAL "load")
-          if (NOT "${package_path}" IN_LIST path)
-            list(APPEND path "${package_path}")
-          endif()
-        elseif (${arg_MODE} STREQUAL "unload")
-          list(REMOVE_ITEM path "${package_path}")
-        elseif (${arg_MODE} STREQUAL "lmod")
-          capp_stdout("append_path(\"PATH\", \"${package_path}\")")
-        endif()
-      endif()
+    set(package_path "${CAPP_INSTALL_ROOT}/${package}/bin")
+    if (EXISTS "${package_path}")
+      list(APPEND path "${package_path}")
     endif()
+    foreach(relpath IN LISTS ${package}_PYTHONPATH)
+      set(package_pythonpath "${CAPP_INSTALL_ROOT}/${package}/${relpath}")
+      if (EXISTS "${package_pythonpath}")
+        list(APPEND pythonpath "${package_pythonpath}")
+      endif()
+    endforeach()
   endforeach()
-  string(REPLACE ";" ":" path "${path}")
-  if (arg_MODE MATCHES "load|unload")
-    capp_stdout("export PATH=\"${path}\"")
+  if (arg_MODE STREQUAL "load")
+    capp_add_paths(newpath PATH "${path}")
+    capp_stdout("export PATH=\"${newpath}\"")
+    capp_add_paths(newpath PYTHONPATH "${pythonpath}")
+    capp_stdout("export PYTHONPATH=\"${newpath}\"")
+  elseif (arg_MODE STREQUAL "unload")
+    capp_remove_paths(newpath PATH "${path}")
+    capp_stdout("export PATH=\"${newpath}\"")
+    capp_remove_paths(newpath PYTHONPATH "${pythonpath}")
+    capp_stdout("export PYTHONPATH=\"${newpath}\"")
+  elseif(arg_MODE STREQUAL "lmod")
+    foreach(entry IN LISTS path)
+      capp_stdout("prepend_path(\"PATH\", \"${entry}\")")
+    endforeach()
+    foreach(entry IN LISTS pythonpath)
+      capp_stdout("prepend_path(\"PYTHONPATH\", \"${entry}\")")
+    endforeach()
   endif()
   set(${arg_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
@@ -1375,6 +1560,8 @@ function(capp_parse_main_args)
       set("${variable_name}" "${variable_value}" PARENT_SCOPE)
     elseif (arg MATCHES "${flavor_regex}")
       list(POP_FRONT remaining_args flavor)
+    elseif (arg STREQUAL "--proxy")
+      list(POP_FRONT remaining_args proxy)
     else()
       list(APPEND command_args "${arg}")
     endif()
@@ -1386,6 +1573,7 @@ function(capp_parse_main_args)
   set(CAPP_COMMAND "${command}" PARENT_SCOPE)
   set(CAPP_COMMAND_ARGUMENTS "${command_args}" PARENT_SCOPE)
   set(CAPP_FLAVOR "${flavor}" PARENT_SCOPE)
+  set(CAPP_PROXY "${proxy}" PARENT_SCOPE)
 endfunction()
 
 capp_parse_main_args()
@@ -1553,12 +1741,8 @@ elseif(CAPP_COMMAND MATCHES "load|unload|lmod")
   capp_setup_flavor()
   capp_read_package_files_by_dependency()
   capp_topsort_packages()
-  capp_separate_command_args(
-    INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
-    PACKAGES_VARIABLE packages)
   capp_environment_command(
     RESULT_VARIABLE capp_command_result
-    PACKAGES ${packages}
     MODE ${CAPP_COMMAND}
   )
 else()
