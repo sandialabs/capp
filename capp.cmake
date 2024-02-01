@@ -1340,8 +1340,6 @@ function(capp_pull_command)
     COMMAND "${GIT_EXECUTABLE}" pull
     WORKING_DIRECTORY "${CAPP_ROOT}"
     RESULT_VARIABLE pull_result
-    OUTPUT_QUIET
-    ERROR_QUIET
     )
   if (NOT pull_result EQUAL 0)
     set(${capp_pull_command_RESULT_VARIABLE} "${pull_result}" PARENT_SCOPE)
