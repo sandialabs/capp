@@ -196,7 +196,7 @@ function(capp_checkout)
   else()
     #From here on out we will be trying to change the commit that a package
     #is checked out to, so we will mark it as needing re-configuration
-    capp_invalidate_config_all_flavors(${package})
+    capp_invalidate_config(${package})
     #For multiple reasons (either fetching or picking a branch to check out),
     #we need to identify which remote the desired URL maps to.
     set(remote)
@@ -856,28 +856,15 @@ macro(capp_read_all_package_files)
   endforeach()
 endmacro()
 
-function(capp_invalidate_config_current_flavor package)
+function(capp_invalidate_config package)
   if (${package}_NO_CONFIGURE_CACHE)
     file(REMOVE "${CAPP_BUILD_ROOT}/${package}/CMakeCache.txt")
   endif()
   file(REMOVE "${CAPP_BUILD_ROOT}/${package}/capp_configured.txt")
 endfunction()
 
-function(capp_invalidate_config_all_flavors package)
-  capp_get_subdirectories(flavors "${CAPP_ROOT}/flavor")
-  foreach (flavor ${flavors})
-    if (${package}_NO_CONFIGURE_CACHE)
-      file(REMOVE "${CAPP_ROOT}/flavor/${flavor}/build/${package}/CMakeCache.txt")
-    endif()
-    file(REMOVE "${CAPP_ROOT}/flavor/${flavor}/build/${package}/capp_configured.txt")
-  endforeach()
-endfunction()
-
-function(capp_invalidate_install_all_flavors package)
-  capp_get_subdirectories(flavors "${CAPP_ROOT}/flavor")
-  foreach (flavor ${flavors})
-    file(REMOVE "${CAPP_ROOT}/flavor/${flavor}/install/${package}/capp_installed.txt")
-  endforeach()
+function(capp_invalidate_install package)
+  file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
 endfunction()
 
 #CApp uses these "sentinel" files capp_installed.txt and capp_configured.txt to
@@ -944,7 +931,7 @@ function(capp_initialize_needs)
       set(${package}_IS_CONFIGURED FALSE)
     endif()
     if (NOT ${package}_IS_CONFIGURED)
-      capp_invalidate_config_current_flavor(${package})
+      capp_invalidate_config(${package})
     endif()
   endforeach()
   foreach(package IN LISTS CAPP_PACKAGES)
@@ -1611,7 +1598,7 @@ elseif(CAPP_COMMAND STREQUAL "rebuild")
     PACKAGES_VARIABLE build_list
     BUILD_ARGUMENTS_VARIABLE build_args)
   foreach (package IN LISTS build_list)
-    capp_invalidate_install_all_flavors(${package})
+    capp_invalidate_install(${package})
   endforeach()
   capp_initialize_needs()
   capp_fulfill_needs(
@@ -1629,7 +1616,7 @@ elseif(CAPP_COMMAND STREQUAL "reconfig")
     PACKAGES_VARIABLE config_list
     BUILD_ARGUMENTS_VARIABLE build_args)
   foreach (package IN LISTS config_list)
-    capp_invalidate_config_all_flavors(${package})
+    capp_invalidate_config(${package})
   endforeach()
   capp_initialize_needs()
   capp_fulfill_needs(
