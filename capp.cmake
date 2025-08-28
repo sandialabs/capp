@@ -9,7 +9,7 @@ if (WIN32)
   set(CMAKE_PROGRAM_PATH "C:/Program Files") #workaround a workaround for MSVC 2017 in FindGit.cmake
 endif()
 find_package(Git REQUIRED QUIET)
-find_package(Python COMPONENTS Interpreter QUIET)
+find_package(Python 3.10 COMPONENTS Interpreter QUIET)
 
 function(capp_stdout msg)
   execute_process(COMMAND "${CMAKE_COMMAND}" -E echo "${msg}")
@@ -428,19 +428,22 @@ endfunction()
 
 function(capp_clone)
   cmake_parse_arguments(PARSE_ARGV 0 capp_clone "" "PACKAGE;RESULT_VARIABLE" "")
-  message("\nCApp: shallow cloning ${capp_clone_PACKAGE} from ${${capp_clone_PACKAGE}_GIT_URL}\n")
   file(MAKE_DIRECTORY "${CAPP_SOURCE_ROOT}")
+  set(cmd_list
+      "${GIT_EXECUTABLE}"
+      clone --depth 1
+      "${${capp_clone_PACKAGE}_GIT_URL}"
+      ${capp_clone_PACKAGE})
+  message("\nCApp: shallow cloning ${capp_clone_PACKAGE} from ${${capp_clone_PACKAGE}_GIT_URL}\n")
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" clone --depth 1
-            "${${capp_clone_PACKAGE}_GIT_URL}"
-            ${capp_clone_PACKAGE}
+    COMMAND ${cmd_list}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
     RESULT_VARIABLE git_clone_result
     OUTPUT_QUIET
-    ERROR_QUIET
     )
   if (NOT git_clone_result EQUAL 0)
-    message("\nCApp: shallow clone of ${capp_clone_PACKAGE} failed\n")
+    capp_list_to_string(LIST cmd_list STRING cmd_string)
+    message("\nCApp: shallow clone of ${capp_clone_PACKAGE} failed.\nCommand was: ${cmd_string}\n")
     file(REMOVE_RECURSE "${CAPP_SOURCE_ROOT}/${capp_clone_PACKAGE}")
     set(${capp_clone_RESULT_VARIABLE} "${git_clone_result}" PARENT_SCOPE)
     return()
@@ -465,10 +468,6 @@ function(capp_ensure_venv)
       message(FATAL_ERROR "CApp: Cannot create Python virtual environment because Python was not found")
     endif()
     message("CApp: Creating new Python virtual environment at ${CAPP_VENV_ROOT} using ${Python_EXECUTABLE}")
-    set(proxy_flag)
-    if (CAPP_PROXY)
-      set(proxy_flag "--proxy" ${CAPP_PROXY})
-    endif()
     set(cmd_list 
         "${Python_EXECUTABLE}"
         -m
@@ -489,7 +488,7 @@ function(capp_ensure_venv)
     set(cmd_list 
         "${CAPP_VENV_ROOT}/bin/pip"
         install
-        ${proxy_flag}
+        ${CAPP_PIP_FLAGS}
         --upgrade
         wheel
         setuptools
@@ -512,10 +511,6 @@ endfunction()
 
 function(capp_configure)
   cmake_parse_arguments(PARSE_ARGV 0 capp_configure "" "PACKAGE;RESULT_VARIABLE" "")
-  set(proxy_flag)
-  if (CAPP_PROXY)
-    set(proxy_flag "--proxy" ${CAPP_PROXY})
-  endif()
   if (${capp_configure_PACKAGE}_PYTHON_DEPENDENCIES)
     capp_ensure_venv()
     capp_list_to_string(LIST ${capp_configure_PACKAGE}_PYTHON_DEPENDENCIES STRING depstring)
@@ -523,8 +518,7 @@ function(capp_configure)
     set(cmd_list
         "${CAPP_VENV_ROOT}/bin/pip"
         install
-        --no-build-isolation
-        ${proxy_flag}
+        ${CAPP_PIP_FLAGS}
         ${${capp_configure_PACKAGE}_PYTHON_DEPENDENCIES}
        )
     capp_list_to_string(LIST cmd_list STRING cmd_string)
@@ -634,18 +628,29 @@ function(capp_install)
     set(${capp_install_RESULT_VARIABLE} "${cmake_install_result}" PARENT_SCOPE)
   elseif(EXISTS "${setup_path}" OR EXISTS "${pyproject_path}")
     capp_ensure_venv()
-    set(proxy_flag)
-    if (CAPP_PROXY)
-      set(proxy_flag "--proxy" ${CAPP_PROXY})
-    endif()
     message("CApp: Installing ${capp_install_PACKAGE} using pip")
     set(cmd_list
         "${CAPP_VENV_ROOT}/bin/pip"
         install
-        --no-build-isolation
-        ${proxy_flag}
-        "${source_directory}"
+        ${CAPP_PIP_FLAGS}
        )
+    capp_execute(
+        COMMAND "${CAPP_VENV_ROOT}/bin/pip" show "${capp_install_PACKAGE}"
+        RESULT_VARIABLE pip_result
+        OUTPUT_QUIET
+        ERROR_QUIET
+        )
+    if (pip_result EQUAL 0)
+      # package already installed
+      list(APPEND cmd_list --force-reinstall)
+      if (EXISTS "${source_directory}/build")
+        # pip will reuse the old build directory.  If files are removed from the source directory
+        # between commits, they won't be removed from the build directory and pip will reinstall
+        # them...
+        file(REMOVE_RECURSE "${source_directory}/build")
+      endif()
+    endif()
+    list(APPEND cmd_list "${source_directory}")
     capp_list_to_string(LIST cmd_list STRING cmd_string)
     capp_execute(
         COMMAND ${cmd_list}
@@ -662,7 +667,7 @@ function(capp_install)
 endfunction()
 
 macro(capp_app)
-  cmake_parse_arguments(capp_app "" "BUILD_TYPE" "ROOT_PACKAGES" ${ARGN})
+  cmake_parse_arguments(capp_app "" "BUILD_TYPE;PRE_COMMIT" "ROOT_PACKAGES" ${ARGN})
   set(CAPP_ROOT_PACKAGES "${capp_app_ROOT_PACKAGES}")
   set(build_type "${capp_app_BUILD_TYPE}")
   if (NOT build_type)
@@ -671,24 +676,42 @@ macro(capp_app)
   if (NOT CAPP_BUILD_TYPE)
     set(CAPP_BUILD_TYPE "${build_type}")
   endif()
+  set(pre_commit "${capp_app_PRE_COMMIT}")
+  if (NOT CAPP_PRE_COMMIT AND pre_commit)
+    if(NOT IS_ABSOLUTE pre_commit AND EXISTS "${CAPP_ROOT}/${pre_commit}")
+      set(pre_commit "${CAPP_ROOT}/${pre_commit}")
+    endif()
+    set(CAPP_PRE_COMMIT "${pre_commit}")
+  endif()
 endmacro()
 
 function(capp_package)
-  cmake_parse_arguments(PARSE_ARGV 0 capp_package "NO_CONFIGURE_CACHE;IGNORE_UNCOMMITTED;HAS_SUBMODULES" "GIT_URL;COMMIT;SUBDIRECTORY;BUILD_TYPE" "OPTIONS;DEPENDENCIES;PYTHON_DEPENDENCIES;PYTHONPATH")
-  set(${CAPP_PACKAGE}_GIT_URL ${capp_package_GIT_URL} PARENT_SCOPE)
-  set(${CAPP_PACKAGE}_COMMIT ${capp_package_COMMIT} PARENT_SCOPE)
-  set(${CAPP_PACKAGE}_OPTIONS "${capp_package_OPTIONS}" PARENT_SCOPE)
-  set(${CAPP_PACKAGE}_DEPENDENCIES "${capp_package_DEPENDENCIES}" PARENT_SCOPE)
-  set(${CAPP_PACKAGE}_PYTHON_DEPENDENCIES "${capp_package_PYTHON_DEPENDENCIES}" PARENT_SCOPE)
-  set(${CAPP_PACKAGE}_PYTHONPATH "${capp_package_PYTHONPATH}" PARENT_SCOPE)
-  set(${CAPP_PACKAGE}_NO_CONFIGURE_CACHE "${capp_package_NO_CONFIGURE_CACHE}" PARENT_SCOPE)
-  set(${CAPP_PACKAGE}_IGNORE_UNCOMMITTED "${capp_package_IGNORE_UNCOMMITTED}" PARENT_SCOPE)
-  set(${CAPP_PACKAGE}_HAS_SUBMODULES "${capp_package_HAS_SUBMODULES}" PARENT_SCOPE)
-  set(${CAPP_PACKAGE}_SUBDIRECTORY "${capp_package_SUBDIRECTORY}" PARENT_SCOPE)
-  if (capp_package_BUILD_TYPE)
-    set(${CAPP_PACKAGE}_BUILD_TYPE "${capp_package_BUILD_TYPE}" PARENT_SCOPE)
+  cmake_parse_arguments(PARSE_ARGV 0 arg
+      "NO_CONFIGURE_CACHE;IGNORE_UNCOMMITTED;HAS_SUBMODULES;IS_LOCAL"
+      "GIT_URL;COMMIT;SUBDIRECTORY;BUILD_TYPE;PRE_COMMIT"
+      "OPTIONS;DEPENDENCIES;PYTHON_DEPENDENCIES;PYTHONPATH")
+  set(${CAPP_PACKAGE}_GIT_URL ${arg_GIT_URL} PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_COMMIT ${arg_COMMIT} PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_OPTIONS "${arg_OPTIONS}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_DEPENDENCIES "${arg_DEPENDENCIES}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_PYTHON_DEPENDENCIES "${arg_PYTHON_DEPENDENCIES}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_PYTHONPATH "${arg_PYTHONPATH}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_NO_CONFIGURE_CACHE "${arg_NO_CONFIGURE_CACHE}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_IGNORE_UNCOMMITTED "${arg_IGNORE_UNCOMMITTED}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_HAS_SUBMODULES "${arg_HAS_SUBMODULES}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_IS_LOCAL "${arg_IS_LOCAL}" PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_SUBDIRECTORY "${arg_SUBDIRECTORY}" PARENT_SCOPE)
+  if (arg_BUILD_TYPE)
+    set(${CAPP_PACKAGE}_BUILD_TYPE "${arg_BUILD_TYPE}" PARENT_SCOPE)
   else()
     set(${CAPP_PACKAGE}_BUILD_TYPE "${CAPP_BUILD_TYPE}" PARENT_SCOPE)
+  endif()
+  set(pre_commit "${arg_PRE_COMMIT}")
+  if (pre_commit)
+    if(NOT IS_ABSOLUTE pre_commit AND EXISTS "${CAPP_SOURCE_ROOT}/${CAPP_PACKAGE}/${pre_commit}")
+      set(pre_commit "${CAPP_SOURCE_ROOT}/${CAPP_PACKAGE}/${pre_commit}")
+    endif()
+    set(${CAPP_PACKAGE}_PRE_COMMIT "${pre_commit}" PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -752,7 +775,7 @@ function(capp_build_install)
   set(${capp_build_install_RESULT_VARIABLE} ${capp_install_result} PARENT_SCOPE)
   if (capp_install_result EQUAL 0)
     set(${capp_build_install_PACKAGE}_IS_INSTALLED TRUE PARENT_SCOPE)
-    file(WRITE "${CAPP_INSTALL_ROOT}/${capp_build_install_PACKAGE}/capp_installed.txt" "Yes")
+    file(WRITE "${CAPP_BUILD_ROOT}/${capp_build_install_PACKAGE}/capp_installed.txt" "Yes")
   else()
     message("CApp: capp_build_install failed because capp_install failed")
   endif()
@@ -766,6 +789,7 @@ function(capp_read_package_file)
   set(${CAPP_PACKAGE}_NO_CONFIGURE_CACHE ${${CAPP_PACKAGE}_NO_CONFIGURE_CACHE} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_IGNORE_UNCOMMITTED ${${CAPP_PACKAGE}_IGNORE_UNCOMMITTED} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_HAS_SUBMODULES ${${CAPP_PACKAGE}_HAS_SUBMODULES} PARENT_SCOPE)
+  set(${CAPP_PACKAGE}_IS_LOCAL ${${CAPP_PACKAGE}_IS_LOCAL} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_GIT_URL ${${CAPP_PACKAGE}_GIT_URL} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_COMMIT ${${CAPP_PACKAGE}_COMMIT} PARENT_SCOPE)
   set(${CAPP_PACKAGE}_OPTIONS "${${CAPP_PACKAGE}_OPTIONS}" PARENT_SCOPE)
@@ -774,6 +798,9 @@ function(capp_read_package_file)
   set(${CAPP_PACKAGE}_PYTHONPATH "${${CAPP_PACKAGE}_PYTHONPATH}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_SUBDIRECTORY "${${CAPP_PACKAGE}_SUBDIRECTORY}" PARENT_SCOPE)
   set(${CAPP_PACKAGE}_BUILD_TYPE "${${CAPP_PACKAGE}_BUILD_TYPE}" PARENT_SCOPE)
+  if (${CAPP_PACKAGE}_PRE_COMMIT)
+    set(${CAPP_PACKAGE}_PRE_COMMIT "${${CAPP_PACKAGE}_PRE_COMMIT}" PARENT_SCOPE)
+  endif()
   set(CAPP_PACKAGES ${CAPP_PACKAGES} ${CAPP_PACKAGE} PARENT_SCOPE)
 endfunction()
 
@@ -808,19 +835,36 @@ macro(capp_setup_flavor)
       set(CAPP_FLAVOR "${flavor}")
     endif()
   endif()
+  if (NOT CAPP_FLAVOR)
+    if (DEFINED ENV{CAPP_FLAVOR})
+      set(CAPP_FLAVOR $ENV{CAPP_FLAVOR})
+    endif()
+  endif()
   if (CAPP_FLAVOR)
     set(CAPP_FLAVOR_ROOT "${CAPP_ROOT}/flavor/${CAPP_FLAVOR}")
     set(CAPP_BUILD_ROOT "${CAPP_FLAVOR_ROOT}/build")
-    set(CAPP_INSTALL_ROOT "${CAPP_FLAVOR_ROOT}/install")
-    set(CAPP_VENV_ROOT "${CAPP_FLAVOR_ROOT}/venv")
+    if (NOT CAPP_PREFIX)
+      if (DEFINED ENV{CAPP_PREFIX})
+        set(CAPP_PREFIX $ENV{CAPP_PREFIX})
+      endif()
+    endif()
+    if (CAPP_PREFIX)
+      set(CAPP_INSTALL_ROOT "${CAPP_PREFIX}")
+      set(CAPP_VENV_ROOT "${CAPP_PREFIX}/venv")
+    else()
+      set(CAPP_INSTALL_ROOT "${CAPP_FLAVOR_ROOT}/install")
+      set(CAPP_VENV_ROOT "${CAPP_FLAVOR_ROOT}/venv")
+    endif()
     set(flavor_file "${CAPP_FLAVOR_ROOT}/flavor.cmake")
     if (NOT EXISTS "${flavor_file}")
-      message(FATAL_ERROR "Flavor file ${flavor_file} doesn't exist. It should define any CMake variables needed to setup this flavor of the overall build. If you have no such variables, creating an empty file will suffice.")
+      message(FATAL_ERROR "CApp: Flavor file ${flavor_file} doesn't exist. It should define any CMake variables needed to setup this flavor of the overall build. If you have no such variables, creating an empty file will suffice.")
     endif()
     include("${flavor_file}")
   else()
     if (NOT arg_OPTIONAL)
-      message(FATAL_ERROR "No flavor has been selected. You can select a flavor using the `-f name` command line flag or by running CApp from inside a flavor subdirectory.")
+      capp_subdirectories(PARENT_DIRECTORY "${CAPP_ROOT}/flavor" RESULT_VARIABLE flavors)
+      string(REPLACE ";" ", " flavors "${flavors}")
+      message(FATAL_ERROR "CApp: No flavor has been selected. You can select a flavor by setting the CAPP_FLAVOR environment variable, giving the `-f <flavor>` command line flag to CApp, or by running CApp from inside a flavor subdirectory. Available flavors are: ${flavors}.")
     endif()
   endif()
 endmacro()
@@ -864,7 +908,7 @@ function(capp_invalidate_config package)
 endfunction()
 
 function(capp_invalidate_install package)
-  file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
+  file(REMOVE "${CAPP_BUILD_ROOT}/${package}/capp_installed.txt")
 endfunction()
 
 #CApp uses these "sentinel" files capp_installed.txt and capp_configured.txt to
@@ -947,13 +991,13 @@ function(capp_initialize_needs)
     endif()
     capp_sentinel_file_valid(
       PACKAGE ${package}
-      SENTINEL_FILE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt"
+      SENTINEL_FILE "${CAPP_BUILD_ROOT}/${package}/capp_installed.txt"
       RESULT_VARIABLE install_sentinel_valid)
     if (NOT install_sentinel_valid)
       set(${package}_IS_INSTALLED FALSE)
     endif()
     if (NOT ${package}_IS_INSTALLED)
-      file(REMOVE "${CAPP_INSTALL_ROOT}/${package}/capp_installed.txt")
+      file(REMOVE "${CAPP_BUILD_ROOT}/${package}/capp_installed.txt")
     endif()
   endforeach()
   foreach(package IN LISTS CAPP_PACKAGES)
@@ -1161,6 +1205,11 @@ endfunction()
 
 function(capp_commit_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_commit_command "" "PACKAGE;RESULT_VARIABLE" "")
+  if (${capp_commit_command_PACKAGE}_IS_LOCAL)
+    # Local packages are skipped by the commit command
+    set(${capp_commit_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
+    return()
+  endif()
   #Safety check: make sure all the user's changes are committed before proceeding.
   capp_changes_committed(
     PACKAGE ${capp_commit_command_PACKAGE}
@@ -1176,7 +1225,7 @@ function(capp_commit_command)
     COMMIT_VARIABLE new_commit
     RESULT_VARIABLE capp_get_commit_result
   )
-  if (new_commit STREQUAL ${${capp_commit_command_PACKAGE}_COMMIT})
+  if ("${new_commit}" STREQUAL "${${capp_commit_command_PACKAGE}_COMMIT}")
     message("\nCApp: commit for ${capp_commit_command_PACKAGE} has not changed")
     set(${capp_commit_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
     return()
@@ -1300,14 +1349,21 @@ function(capp_checkout_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_checkout_command "" "RESULT_VARIABLE" "PACKAGES")
   foreach(package IN LISTS capp_checkout_command_PACKAGES)
     if (EXISTS "${CAPP_SOURCE_ROOT}/${package}")
-      capp_checkout(
-        PACKAGE ${package}
-        RESULT_VARIABLE checkout_result)
-      if (NOT checkout_result EQUAL 0)
-        set(${capp_checkout_command_RESULT_VARIABLE} ${checkout_result} PARENT_SCOPE)
-        return()
+      if (NOT ${${package}_IS_LOCAL})
+        capp_checkout(
+          PACKAGE ${package}
+          RESULT_VARIABLE checkout_result)
+        if (NOT checkout_result EQUAL 0)
+          set(${capp_checkout_command_RESULT_VARIABLE} ${checkout_result} PARENT_SCOPE)
+          return()
+        endif()
       endif()
     else()
+      if (${${package}_IS_LOCAL})
+        message("CApp: ${package} has IS_LOCAL but ${CAPP_SOURCE_ROOT}/${package} does not exist")
+        set(${capp_checkout_command_RESULT_VARIABLE} -1 PARENT_SCOPE)
+        return()
+      endif()
       capp_clone(
         PACKAGE ${package}
         RESULT_VARIABLE clone_result)
@@ -1318,6 +1374,40 @@ function(capp_checkout_command)
     endif()
   endforeach()
   set(${capp_checkout_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
+endfunction()
+
+function(capp_develop_command)
+  cmake_parse_arguments(PARSE_ARGV 0 arg "" "RESULT_VARIABLE" "PACKAGES")
+  foreach(package IN LISTS arg_PACKAGES)
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" fetch --unshallow
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      RESULT_VARIABLE result)
+    if (NOT result EQUAL 0)
+      message("CApp: git fetch --unshallow failed in ${package}")
+      set(${arg_RESULT_VARIABLE} "${result}" PARENT_SCOPE)
+      return()
+    endif()
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" remote set-branches origin *
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      RESULT_VARIABLE result)
+    if (NOT result EQUAL 0)
+      message("CApp: git remote set-branches origin '*' failed in ${package}")
+      set(${arg_RESULT_VARIABLE} "${result}" PARENT_SCOPE)
+      return()
+    endif()
+    capp_execute(
+      COMMAND "${GIT_EXECUTABLE}" fetch origin
+      WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+      RESULT_VARIABLE result)
+    if (NOT result EQUAL 0)
+      message("CApp: git fetch origin failed in ${package}")
+      set(${arg_RESULT_VARIABLE} "${result}" PARENT_SCOPE)
+      return()
+    endif()
+  endforeach()
+  set(${arg_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
 function(capp_pull_command)
@@ -1513,7 +1603,16 @@ function(capp_separate_command_args)
     endif()
   endwhile()
   if (NOT packages)
-    set(packages "${CAPP_PACKAGES}")
+    # If the user didn't list packages as command line arguments
+    # but they are running inside a source/<package> directory,
+    # operate only on <package>
+    set(source_dir_regex "${CAPP_SOURCE_ROOT}/([^/])")
+    if (CMAKE_CURRENT_SOURCE_DIR MATCHES "${source_dir_regex}")
+      string(REGEX REPLACE "${source_dir_regex}" "\\1" package "${CMAKE_CURRENT_SOURCE_DIR}")
+      set(packages "${package}")
+    else()
+      set(packages "${CAPP_PACKAGES}")
+    endif()
   endif()
   if (arg_PACKAGES_VARIABLE)
     set(${arg_PACKAGES_VARIABLE} "${packages}" PARENT_SCOPE)
@@ -1537,6 +1636,7 @@ function(capp_parse_main_args)
   while (remaining_args)
     list(POP_FRONT remaining_args arg)
     if (arg STREQUAL "--")
+    elseif (arg STREQUAL "")
     elseif (NOT command)
       set(command "${arg}")
     elseif (arg MATCHES "${definition_regex}")
@@ -1547,6 +1647,8 @@ function(capp_parse_main_args)
       list(POP_FRONT remaining_args flavor)
     elseif (arg STREQUAL "--proxy")
       list(POP_FRONT remaining_args proxy)
+    elseif (arg STREQUAL "--prefix")
+      list(POP_FRONT remaining_args prefix)
     else()
       list(APPEND command_args "${arg}")
     endif()
@@ -1559,6 +1661,17 @@ function(capp_parse_main_args)
   set(CAPP_COMMAND_ARGUMENTS "${command_args}" PARENT_SCOPE)
   set(CAPP_FLAVOR "${flavor}" PARENT_SCOPE)
   set(CAPP_PROXY "${proxy}" PARENT_SCOPE)
+  set(pip_flags
+      --trusted-host pypi.python.org
+      --trusted-host files.pythonhosted.org
+      )
+  if (proxy)
+    list(APPEND pip_flags --proxy ${proxy})
+  endif()
+  if (prefix)
+    set(CAPP_PREFIX "${prefix}" PARENT_SCOPE)
+  endif()
+  set(CAPP_PIP_FLAGS "${pip_flags}" PARENT_SCOPE)
 endfunction()
 
 capp_parse_main_args()
@@ -1665,10 +1778,9 @@ elseif(CAPP_COMMAND STREQUAL "commit")
   else()
     capp_read_all_package_files()
   endif()
-  set(commit_list "${CAPP_COMMAND_ARGUMENTS}")
-  if (NOT commit_list)
-    set(commit_list "${CAPP_PACKAGES}")
-  endif()
+  capp_separate_command_args(
+    INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+    PACKAGES_VARIABLE commit_list)
   set(capp_command_result 0)
   foreach (package IN LISTS commit_list)
     if (EXISTS "${CAPP_SOURCE_ROOT}/${package}")
@@ -1680,7 +1792,7 @@ elseif(CAPP_COMMAND STREQUAL "commit")
         break()
       endif()
     elseif (NOT EXISTS "${CAPP_PACKAGE_ROOT}/${package}")
-      message("CApp commit was given argument ${package} which is not a package")
+      message("CApp commit: ${package} is not checked out")
       set(capp_command_result -1)
     endif()
   endforeach()
@@ -1699,6 +1811,25 @@ elseif(CAPP_COMMAND STREQUAL "checkout")
   capp_checkout_command(
     RESULT_VARIABLE capp_command_result
     PACKAGES ${checkout_list}
+  )
+elseif(CAPP_COMMAND STREQUAL "develop")
+  capp_find_root()
+  capp_setup_flavor(OPTIONAL)
+  if (CAPP_FLAVOR)
+    capp_read_package_files_by_dependency()
+    capp_topsort_packages()
+  else()
+    capp_read_all_package_files()
+  endif()
+  capp_separate_command_args(
+    INPUT_ARGUMENTS ${CAPP_COMMAND_ARGUMENTS}
+    PACKAGES_VARIABLE develop_list)
+  if (NOT develop_list)
+    message(FATAL_ERROR "CApp: develop command expects one or more package names")
+  endif()
+  capp_develop_command(
+    RESULT_VARIABLE capp_command_result
+    PACKAGES "${develop_list}"
   )
 elseif(CAPP_COMMAND STREQUAL "pull")
   capp_find_root()
@@ -1730,6 +1861,61 @@ elseif(CAPP_COMMAND MATCHES "load|unload|lmod")
     RESULT_VARIABLE capp_command_result
     MODE ${CAPP_COMMAND}
   )
+elseif(CAPP_COMMAND STREQUAL "clean")
+  capp_find_root()
+  capp_setup_flavor()
+  capp_read_package_files_by_dependency()
+  message("CApp: removing ${CAPP_BUILD_ROOT}")
+  file(REMOVE_RECURSE "${CAPP_BUILD_ROOT}")
+  message("CApp: removing ${CAPP_INSTALL_ROOT}")
+  file(REMOVE_RECURSE "${CAPP_INSTALL_ROOT}")
+  message("CApp: removing ${CAPP_VENV_ROOT}")
+  file(REMOVE_RECURSE "${CAPP_VENV_ROOT}")
+  foreach(root_package IN LISTS CAPP_ROOT_PACKAGES)
+    set(source_directory "${CAPP_SOURCE_ROOT}/${root_package}")
+    if (${root_package}_SUBDIRECTORY)
+      set(source_directory "${source_directory}/${${root_package}_SUBDIRECTORY}")
+    endif()
+    set(setup_path "${source_directory}/setup.py")
+    set(pyproject_path "${source_directory}/pyproject.toml")
+    if((EXISTS "${setup_path}" OR EXISTS "${pyproject_path}") AND EXISTS "${source_directory}/build")
+      message("CApp: removing ${source_directory}/build")
+      file(REMOVE_RECURSE "${source_directory}/build")
+    endif()
+  endforeach()
+  set(capp_command_result 0)
+elseif(CAPP_COMMAND STREQUAL "pre-commit")
+  capp_find_root()
+  capp_setup_flavor()
+  capp_read_package_files_by_dependency()
+  message("CApp: performing pre-commit")
+  set(errors 0)
+  if (CAPP_PRE_COMMIT)
+    message("CApp: executing `${CAPP_PRE_COMMIT}` in ${CAPP_ROOT}")
+    execute_process(
+      COMMAND ${CAPP_PRE_COMMIT}
+      WORKING_DIRECTORY "${CAPP_ROOT}"
+      RESULT_VARIABLE pre_commit_result
+    )
+    if (NOT pre_commit_result EQUAL 0)
+      message(WARNING "CApp: ${CAPP_PACKAGE} pre-commit failed")
+      math(EXPR errors "${errors}+1")
+    endif()
+  endif()
+  foreach(root_package IN LISTS CAPP_ROOT_PACKAGES)
+    if (${root_package}_PRE_COMMIT)
+      message("CApp: executing `${${root_package}_PRE_COMMIT}` in ${CAPP_SOURCE_ROOT}/${root_package}")
+      execute_process(
+        COMMAND ${${root_package}_PRE_COMMIT}
+        WORKING_DIRECTORY  "${CAPP_SOURCE_ROOT}/${root_package}"
+        RESULT_VARIABLE pre_commit_result)
+      if (NOT pre_commit_result EQUAL 0)
+        message(WARNING "CApp: ${root_package} pre-commit failed")
+        math(EXPR errors "${errors}+1")
+      endif()
+    endif()
+  endforeach()
+  set(capp_command_result "${errors}")
 else()
   message(FATAL_ERROR "Unknown command ${CAPP_COMMAND}!")
 endif()
