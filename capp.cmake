@@ -5,6 +5,8 @@ set(CAPP_TRUE TRUE)
 #is the first sub-expression and the branch is the second
 set(CAPP_REMOTE_REF_REGEX "refs/remotes/([0-9A-Za-z_-]+)/([0-9A-Za-z\\./_-]+)")
 
+set(CAPP_CORE_PYTHON_PACKAGES wheel setuptools setuptools-scm pip)
+
 if (WIN32)
   set(CMAKE_PROGRAM_PATH "C:/Program Files") #workaround a workaround for MSVC 2017 in FindGit.cmake
 endif()
@@ -153,6 +155,39 @@ function(capp_changes_committed)
     return()
   endif()
   set(${result_variable} 0 PARENT_SCOPE)
+endfunction()
+
+function(capp_pip_download)
+  cmake_parse_arguments(PARSE_ARGV 0 capp_pip_download "" "PACKAGE;RESULT_VARIABLE" "")
+  capp_ensure_venv()
+  message("CApp: Downloading python wheels for package ${capp_pip_download_PACKAGE}\n")
+  if (DEFINED ENV{PIP_PLATFORM_FLAGS})
+    set(PIP_PLATFORM_FLAGS $ENV{PIP_PLATFORM_FLAGS})
+    separate_arguments(PIP_PLATFORM_FLAGS)
+  endif()
+  file(MAKE_DIRECTORY "${CAPP_PIP_CACHE}")
+  set(cmd_list
+    "${CAPP_VENV_ROOT}/bin/pip"
+    ${CAPP_PIP_FLAGS}
+    download
+    --dest "${CAPP_PIP_CACHE}"
+    --only-binary=:all:
+    ${PIP_PLATFORM_FLAGS}
+    "${CAPP_SOURCE_ROOT}/${package}"
+    )
+  capp_execute(
+    COMMAND ${cmd_list}
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+    RESULT_VARIABLE pip_download_result
+    OUTPUT_QUIET
+    )
+  if (NOT pip_download_result EQUAL 0)
+    capp_list_to_string(LIST cmd_list STRING cmd_string)
+    message("\nCApp: download of python wheels for ${package} failed.\nCommand was: ${cmd_string}\n")
+    set(${capp_pip_download_RESULT_VARIABLE} "${pip_download_result}" PARENT_SCOPE)
+    return()
+  endif()
+  set(${capp_pip_download_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
 
 #This function's main purpose is to get the repository at source/<package>
@@ -468,7 +503,7 @@ function(capp_ensure_venv)
       message(FATAL_ERROR "CApp: Cannot create Python virtual environment because Python was not found")
     endif()
     message("CApp: Creating new Python virtual environment at ${CAPP_VENV_ROOT} using ${Python_EXECUTABLE}")
-    set(cmd_list 
+    set(cmd_list
         "${Python_EXECUTABLE}"
         -m
         venv
@@ -485,14 +520,13 @@ function(capp_ensure_venv)
     else()
       message("CApp: Successfully created Python virtual environment at ${CAPP_VENV_ROOT}")
     endif()
-    set(cmd_list 
+    set(cmd_list
         "${CAPP_VENV_ROOT}/bin/pip"
         install
         ${CAPP_PIP_FLAGS}
+        --find-links "${CAPP_PIP_CACHE}"
         --upgrade
-        wheel
-        setuptools
-        pip
+        ${CAPP_CORE_PYTHON_PACKAGES}
        )
     capp_list_to_string(LIST cmd_list STRING cmd_string)
     capp_execute(
@@ -519,6 +553,7 @@ function(capp_configure)
         "${CAPP_VENV_ROOT}/bin/pip"
         install
         ${CAPP_PIP_FLAGS}
+        --find-links "${CAPP_PIP_CACHE}"
         ${${capp_configure_PACKAGE}_PYTHON_DEPENDENCIES}
        )
     capp_list_to_string(LIST cmd_list STRING cmd_string)
@@ -531,7 +566,7 @@ function(capp_configure)
       message("CApp: failed to install Python dependencies of ${capp_configure_PACKAGE}\ncommand: ${cmd_string}\n")
       return()
     else()
-      message("CApp: successfully installed Python dependencies ${depstring} of ${capp_configure_PACKAGE}") 
+      message("CApp: successfully installed Python dependencies ${depstring} of ${capp_configure_PACKAGE}")
     endif()
   endif()
   file(MAKE_DIRECTORY "${CAPP_BUILD_ROOT}/${capp_configure_PACKAGE}")
@@ -633,6 +668,7 @@ function(capp_install)
         "${CAPP_VENV_ROOT}/bin/pip"
         install
         ${CAPP_PIP_FLAGS}
+        --find-links "${CAPP_PIP_CACHE}"
        )
     capp_execute(
         COMMAND "${CAPP_VENV_ROOT}/bin/pip" show "${capp_install_PACKAGE}"
@@ -817,6 +853,7 @@ macro(capp_find_root)
   endwhile()
   set(CAPP_SOURCE_ROOT "${CAPP_ROOT}/source")
   set(CAPP_PACKAGE_ROOT "${CAPP_ROOT}/package")
+  set(CAPP_PIP_CACHE "${CAPP_ROOT}/pip-cache")
   capp_get_commit(
       GIT_REPO_PATH "${CAPP_ROOT}"
       COMMIT_VARIABLE CAPP_COMMIT
@@ -1347,6 +1384,31 @@ endfunction()
 
 function(capp_checkout_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_checkout_command "" "RESULT_VARIABLE" "PACKAGES")
+
+  # Start by acquiring wheels for core packages.
+  capp_ensure_venv()
+  set(cmd_list
+    "${CAPP_VENV_ROOT}/bin/pip"
+    ${CAPP_PIP_FLAGS}
+    download
+    --dest "${CAPP_PIP_CACHE}"
+    --only-binary=:all:
+    ${PIP_PLATFORM_FLAGS}
+    ${CAPP_CORE_PYTHON_PACKAGES}
+    )
+  capp_execute(
+    COMMAND ${cmd_list}
+    WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+    RESULT_VARIABLE pip_download_result
+    OUTPUT_QUIET
+    )
+  if (NOT pip_download_result EQUAL 0)
+    capp_list_to_string(LIST cmd_list STRING cmd_string)
+    message("\nCApp: download of python wheels for packages failed: ${capp_venv_packages}\nCommand was: ${cmd_string}\n")
+    set(${capp_pip_download_RESULT_VARIABLE} "${pip_download_result}" PARENT_SCOPE)
+    return()
+  endif()
+
   foreach(package IN LISTS capp_checkout_command_PACKAGES)
     if (EXISTS "${CAPP_SOURCE_ROOT}/${package}")
       if (NOT ${${package}_IS_LOCAL})
@@ -1369,6 +1431,20 @@ function(capp_checkout_command)
         RESULT_VARIABLE clone_result)
       if (NOT clone_result EQUAL 0)
         set(${capp_checkout_command_RESULT_VARIABLE} ${clone_result} PARENT_SCOPE)
+        return()
+      endif()
+    endif()
+
+    # Now check for the existence of python packages and download wheels.
+    set(pyproject_path "${CAPP_SOURCE_ROOT}/${package}/pyproject.toml")
+    if (EXISTS "${pyproject_path}")
+      capp_pip_download(
+        PACKAGE ${package}
+        RESULT_VARIABLE pip_download_result
+        )
+      if (NOT pip_download_result EQUAL 0)
+        message("pip download failed.")
+        set(${capp_checkout_RESULT_VARIABLE} "${pip_download_result}" PARENT_SCOPE)
         return()
       endif()
     endif()
@@ -1649,6 +1725,8 @@ function(capp_parse_main_args)
       list(POP_FRONT remaining_args proxy)
     elseif (arg STREQUAL "--prefix")
       list(POP_FRONT remaining_args prefix)
+    elseif (arg STREQUAL "--no-pypi")
+      set(no_pypi TRUE)
     else()
       list(APPEND command_args "${arg}")
     endif()
@@ -1667,6 +1745,9 @@ function(capp_parse_main_args)
       )
   if (proxy)
     list(APPEND pip_flags --proxy ${proxy})
+  endif()
+  if (no_pypi)
+    list(APPEND pip_flags --no-index)
   endif()
   if (prefix)
     set(CAPP_PREFIX "${prefix}" PARENT_SCOPE)
@@ -1881,6 +1962,11 @@ elseif(CAPP_COMMAND STREQUAL "clean")
     if((EXISTS "${setup_path}" OR EXISTS "${pyproject_path}") AND EXISTS "${source_directory}/build")
       message("CApp: removing ${source_directory}/build")
       file(REMOVE_RECURSE "${source_directory}/build")
+    endif()
+    set(egg_path "${source_directory}/src/${root_package}.egg-info")
+    if(EXISTS "${egg_path}")
+      message("CApp: removing ${egg_path}")
+      file(REMOVE_RECURSE "${egg_path}")
     endif()
   endforeach()
   set(capp_command_result 0)
