@@ -134,7 +134,7 @@ The easiest way to add a new package to the build repository is via `capp clone`
 
 ```bash
 capp clone git@github.com:Unidata/netcdf-c.git
-vim package/netcdf-c/package.cmake 
+vim package/netcdf-c/package.cmake
 git commit -a -m "added netcdf package"
 ```
 
@@ -186,7 +186,7 @@ the exact versions of all package repositories that were built.
 The `OPTIONS` list should be a list of command line arguments
 to CMake when configuring the package.
 For example, an item `option1` might be `-DFOO_ENABLE_FAST=ON`.
-Note that CApp already defines 
+Note that CApp already defines
 `CMAKE_BUILD_TYPE` and `CMAKE_INSTALL_PREFIX` when
 configuring a package.
 
@@ -395,6 +395,23 @@ For best results, please specify a flavor when using `capp export`:
 ```bash
 capp export -f plain
 cat capp.json
+```
+
+## Packaging
+
+The `capp checkout` command can also be used to generate self-contained application source packages
+that contain all required dependencies to build and install the application, including source
+packages and dependent python modules from pip.
+When the `capp checkout` command is executed, the `pip download` command is used to download
+dependent python modules for each package that contains a python configuration file.
+The resulting wheel files are downloaded into the `./pip-cache/` subdirectory of the capp root prefix.
+These wheel files are subsequently made available during the build and install phases of each package.
+
+The environment variable `PIP_PLATFORM_FLAGS` can be used to control the platform, abi, and other
+tags that determine which wheel file versions are downloaded.
+The contents of this variable are passed directly to each invocation of `pip download`:
+```bash
+pip download ${PIP_PLATFORM_FLAGS} packages...
 ```
 
 At Sandia, CApp is SCR# 2639.0
