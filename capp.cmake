@@ -1437,7 +1437,8 @@ function(capp_checkout_command)
 
     # Now check for the existence of python packages and download wheels.
     set(pyproject_path "${CAPP_SOURCE_ROOT}/${package}/pyproject.toml")
-    if (EXISTS "${pyproject_path}")
+    set(requirements_path "${CAPP_SOURCE_ROOT}/${package}/requirements.txt")
+    if (EXISTS "${pyproject_path}" OR EXISTS "${requirements_path}")
       capp_pip_download(
         PACKAGE ${package}
         RESULT_VARIABLE pip_download_result
@@ -1448,6 +1449,39 @@ function(capp_checkout_command)
         return()
       endif()
     endif()
+
+    # If we have explicitly listed python dependencies, then download those as well.
+    if (${package}_PYTHON_DEPENDENCIES)
+      message("CApp: Downloading python dependencies for package ${package}\n")
+      if (DEFINED ENV{PIP_PLATFORM_FLAGS})
+        set(PIP_PLATFORM_FLAGS $ENV{PIP_PLATFORM_FLAGS})
+        separate_arguments(PIP_PLATFORM_FLAGS)
+      endif()
+      capp_list_to_string(LIST ${${package}_PYTHON_DEPENDENCIES} STRING dep_string)
+      file(MAKE_DIRECTORY "${CAPP_PIP_CACHE}")
+      set(cmd_list
+        "${CAPP_VENV_ROOT}/bin/pip"
+        ${CAPP_PIP_FLAGS}
+        download
+        --dest "${CAPP_PIP_CACHE}"
+        --only-binary=:all:
+        ${PIP_PLATFORM_FLAGS}
+        ${${package}_PYTHON_DEPENDENCIES}
+        )
+      capp_execute(
+        COMMAND ${cmd_list}
+        WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}/${package}"
+        RESULT_VARIABLE pip_download_result
+        OUTPUT_QUIET
+        )
+      if (NOT pip_download_result EQUAL 0)
+        capp_list_to_string(LIST cmd_list STRING cmd_string)
+        message("\nCApp: download of python wheels for ${package} failed.\nCommand was: ${cmd_string}\n")
+        set(${capp_pip_download_RESULT_VARIABLE} "${pip_download_result}" PARENT_SCOPE)
+        return()
+      endif()
+    endif()
+
   endforeach()
   set(${capp_checkout_command_RESULT_VARIABLE} 0 PARENT_SCOPE)
 endfunction()
