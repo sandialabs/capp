@@ -1948,6 +1948,7 @@ elseif(CAPP_COMMAND STREQUAL "develop")
   )
 elseif(CAPP_COMMAND STREQUAL "pull")
   capp_find_root()
+  capp_setup_flavor(OPTIONAL)
   capp_pull_command(
     RESULT_VARIABLE capp_command_result
   )
