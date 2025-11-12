@@ -170,6 +170,7 @@ function(capp_pip_download)
     "${CAPP_VENV_ROOT}/bin/pip"
     ${CAPP_PIP_FLAGS}
     download
+    --exists-action w
     --dest "${CAPP_PIP_CACHE}"
     --only-binary=:all:
     ${PIP_PLATFORM_FLAGS}
@@ -1391,6 +1392,7 @@ function(capp_checkout_command)
     "${CAPP_VENV_ROOT}/bin/pip"
     ${CAPP_PIP_FLAGS}
     download
+    --exists-action w
     --dest "${CAPP_PIP_CACHE}"
     --only-binary=:all:
     ${PIP_PLATFORM_FLAGS}
@@ -1463,6 +1465,7 @@ function(capp_checkout_command)
         "${CAPP_VENV_ROOT}/bin/pip"
         ${CAPP_PIP_FLAGS}
         download
+        --exists-action w
         --dest "${CAPP_PIP_CACHE}"
         --only-binary=:all:
         ${PIP_PLATFORM_FLAGS}
